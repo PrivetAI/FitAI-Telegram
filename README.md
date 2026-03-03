@@ -1,73 +1,49 @@
-# React + TypeScript + Vite
+# FitAI — AI Fitness Telegram Mini App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AI-powered fitness companion with calorie tracking, workout programming, progress monitoring, and more — all inside Telegram.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **AI Food Scanner** — Snap a photo, get instant calories & macros (OpenAI / Gemini Vision)
+- **Nutrition Tracker** — Log meals, track daily macros (P/F/C), 7-day history
+- **AI Workout Generator** — Get personalized workout plans based on your goals
+- **Active Workout Tracker** — Log sets, reps, weight in real-time
+- **Progress Tracking** — Weight chart, body measurements, BMI trends
+- **AI Coaching** — Chat with AI nutrition coach and training coach
+- **Supplements & Vitamins** — Daily checklist with scheduling
+- **Steroid Cycle Tracker** — Compounds, timeline, PCT management
+- **Lab Results Analysis** — AI interpretation of blood work
+- **Achievements & Streaks** — 23 achievements, daily streaks, bronze/silver/gold tiers
+- **Cloud Sync** — Optional Supabase backend with offline-first architecture
+- **Bilingual** — English + Russian with auto-detection
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+React 19 · TypeScript · Vite 7 · Tailwind CSS 4 · Zustand 5 · Supabase · OpenAI · Gemini · Telegram Mini App SDK
 
-## Expanding the ESLint configuration
+## Quick Start
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Deploy
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
+# Deploy dist/ to any static hosting
+# Set URL in @BotFather → /newapp
 ```
+
+## Supabase (Optional)
+
+1. Create project at [supabase.com](https://supabase.com)
+2. Run SQL migrations from `supabase/migrations/`
+3. Enter URL + anon key in app settings
+
+See [PROJECT.md](PROJECT.md) for full documentation.
+
+## License
+
+Private — PrivetAI
