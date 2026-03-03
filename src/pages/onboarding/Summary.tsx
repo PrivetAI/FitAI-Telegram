@@ -3,7 +3,7 @@ import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useAppStore } from '../../stores/appStore';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { FlameIcon, TargetIcon, BoltIcon } from '../../icons';
+import { FlameIcon } from '../../icons';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacros } from '../../utils/tdee';
 import { useTelegram } from '../../hooks/useTelegram';
 import type { UserProfile } from '../../types';

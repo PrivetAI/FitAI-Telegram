@@ -4,7 +4,6 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ current, total }: ProgressBarProps) {
-  const pct = Math.min((current / total) * 100, 100);
   return (
     <div className="flex gap-1.5 w-full">
       {Array.from({ length: total }, (_, i) => (

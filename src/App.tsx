@@ -1,3 +1,4 @@
+import React from 'react';
 import { useAppStore } from './stores/appStore';
 import { useTelegram } from './hooks/useTelegram';
 import { BottomNav } from './components/BottomNav';
@@ -8,7 +9,7 @@ import { Training } from './pages/Training';
 import { Progress } from './pages/Progress';
 import { Profile } from './pages/Profile';
 
-const pages: Record<string, () => JSX.Element | null> = {
+const pages: Record<string, () => React.JSX.Element | null> = {
   dashboard: Dashboard,
   nutrition: Nutrition,
   training: Training,
