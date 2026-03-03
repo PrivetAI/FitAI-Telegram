@@ -4,11 +4,15 @@ import { Button } from '../components/Button';
 import { useAppStore } from '../stores/appStore';
 import { useSupplementStore } from '../stores/supplementStore';
 import { useCycleStore } from '../stores/cycleStore';
+import { useAIStore } from '../stores/aiStore';
 import {
   ProfileIcon, ChevronRightIcon, ChevronLeftIcon, PillIcon, SyringeIcon,
   CheckIcon, PlusIcon, TrashIcon, EditIcon, DownloadIcon, InfoIcon,
+  KeyIcon, SparkleIcon, LoaderIcon, AlertIcon, BeakerIcon, WandIcon,
 } from '../icons';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacros } from '../utils/tdee';
+import { testConnection, getSupplementRecommendations, analyzeLabResults } from '../services/ai';
+import type { SupplementRecommendation, LabValue, LabAnalysisResult } from '../services/ai';
 import type { Supplement, SupplementSchedule, SteroidCycle, CycleFrequency } from '../types';
 
 const goalLabels = {
@@ -26,12 +30,49 @@ const FREQ_LABELS: Record<CycleFrequency, string> = {
   daily: 'Daily', eod: 'Every Other Day', e3d: 'Every 3 Days', weekly: 'Weekly', biweekly: 'Bi-weekly',
 };
 
-type View = 'main' | 'editProfile' | 'supplements' | 'addSupplement' | 'cycles' | 'addCycle' | 'cycleDetail' | 'about';
+const OPENAI_MODELS = [
+  { value: 'gpt-4o', label: 'GPT-4o' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+];
+const GEMINI_MODELS = [
+  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+  { value: 'gemini-2.0-pro', label: 'Gemini 2.0 Pro' },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+];
+
+const LAB_MARKERS = [
+  { name: 'Total Testosterone', unit: 'ng/dL' },
+  { name: 'Free Testosterone', unit: 'pg/mL' },
+  { name: 'Estradiol (E2)', unit: 'pg/mL' },
+  { name: 'LH', unit: 'mIU/mL' },
+  { name: 'FSH', unit: 'mIU/mL' },
+  { name: 'SHBG', unit: 'nmol/L' },
+  { name: 'TSH', unit: 'mIU/L' },
+  { name: 'ALT', unit: 'U/L' },
+  { name: 'AST', unit: 'U/L' },
+  { name: 'Total Cholesterol', unit: 'mg/dL' },
+  { name: 'LDL', unit: 'mg/dL' },
+  { name: 'HDL', unit: 'mg/dL' },
+  { name: 'Triglycerides', unit: 'mg/dL' },
+  { name: 'Hemoglobin', unit: 'g/dL' },
+  { name: 'Hematocrit', unit: '%' },
+  { name: 'RBC', unit: 'M/uL' },
+  { name: 'WBC', unit: 'K/uL' },
+  { name: 'Platelets', unit: 'K/uL' },
+  { name: 'Creatinine', unit: 'mg/dL' },
+  { name: 'Fasting Glucose', unit: 'mg/dL' },
+  { name: 'HbA1c', unit: '%' },
+  { name: 'Vitamin D', unit: 'ng/mL' },
+  { name: 'Ferritin', unit: 'ng/mL' },
+];
+
+type View = 'main' | 'editProfile' | 'supplements' | 'addSupplement' | 'cycles' | 'addCycle' | 'cycleDetail' | 'about' | 'aiSettings' | 'aiSupplements' | 'labResults' | 'labAnalysis';
 
 export function Profile() {
   const { profile, setProfile, setOnboarded } = useAppStore();
   const suppStore = useSupplementStore();
   const cycleStore = useCycleStore();
+  const aiStore = useAIStore();
   const [view, setView] = useState<View>('main');
   const [editData, setEditData] = useState({ age: '', height: '', weight: '' });
   const [suppForm, setSuppForm] = useState({ name: '', dosage: '', schedule: [] as SupplementSchedule[], notes: '' });
@@ -40,7 +81,269 @@ export function Profile() {
   const [selectedCycle, setSelectedCycle] = useState<SteroidCycle | null>(null);
   const [editingSupplement, setEditingSupplement] = useState<Supplement | null>(null);
 
+  // AI Settings state
+  const [aiKeyInput, setAiKeyInput] = useState(aiStore.getApiKey());
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<'success' | 'fail' | ''>('');
+
+  // AI Supplements state
+  const [suppLoading, setSuppLoading] = useState(false);
+  const [suppRecs, setSuppRecs] = useState<SupplementRecommendation[]>([]);
+  const [suppError, setSuppError] = useState('');
+
+  // Lab results state
+  const [labValues, setLabValues] = useState<Record<string, string>>({});
+  const [labLoading, setLabLoading] = useState(false);
+  const [labResult, setLabResult] = useState<LabAnalysisResult | null>(null);
+  const [labError, setLabError] = useState('');
+
   if (!profile) return null;
+
+  // === AI SETTINGS ===
+  if (view === 'aiSettings') {
+    const models = aiStore.provider === 'openai' ? OPENAI_MODELS : GEMINI_MODELS;
+    return (
+      <div className="px-5 pt-6 pb-24 animate-fade-in">
+        <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
+          <ChevronLeftIcon size={16} /> Back
+        </button>
+        <h1 className="text-xl font-bold mb-4">AI Settings</h1>
+
+        <Card className="mb-4">
+          <div className="text-text-muted text-xs mb-2">Provider</div>
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {(['openai', 'gemini'] as const).map(p => (
+              <button key={p} onClick={() => { aiStore.setProvider(p); setAiKeyInput(localStorage.getItem(`fitai-ai-key-${p}`) || ''); }}
+                className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${aiStore.provider === p ? 'bg-accent text-black' : 'bg-surface-lighter text-text-secondary'}`}>
+                {p === 'openai' ? 'OpenAI' : 'Google Gemini'}
+              </button>
+            ))}
+          </div>
+
+          <div className="text-text-muted text-xs mb-2">Model</div>
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {models.map(m => (
+              <button key={m.value} onClick={() => aiStore.setModel(m.value as typeof aiStore.model)}
+                className={`py-2 px-3 rounded-xl text-xs font-medium transition-colors ${aiStore.model === m.value ? 'bg-accent text-black' : 'bg-surface-lighter text-text-secondary'}`}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="text-text-muted text-xs mb-2">API Key</div>
+          <input
+            type="password"
+            placeholder={aiStore.provider === 'openai' ? 'sk-...' : 'AI...'}
+            value={aiKeyInput}
+            onChange={e => setAiKeyInput(e.target.value)}
+            className="mb-3"
+          />
+          <div className="text-text-muted text-[10px] mb-4">
+            Your key is stored locally and never sent to our servers. API calls go directly to {aiStore.provider === 'openai' ? 'OpenAI' : 'Google'}.
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="secondary" fullWidth disabled={!aiKeyInput || testing} onClick={async () => {
+              aiStore.setApiKey(aiKeyInput);
+              setTesting(true);
+              setTestResult('');
+              try {
+                const ok = await testConnection();
+                setTestResult(ok ? 'success' : 'fail');
+              } catch {
+                setTestResult('fail');
+              }
+              setTesting(false);
+            }}>
+              {testing ? <LoaderIcon size={16} /> : 'Test Connection'}
+            </Button>
+            <Button fullWidth onClick={() => { aiStore.setApiKey(aiKeyInput); setView('main'); }}>
+              Save
+            </Button>
+          </div>
+
+          {testResult === 'success' && <div className="text-accent text-xs mt-3 text-center">Connection successful</div>}
+          {testResult === 'fail' && <div className="text-danger text-xs mt-3 text-center">Connection failed. Check your API key.</div>}
+        </Card>
+      </div>
+    );
+  }
+
+  // === AI SUPPLEMENT RECOMMENDATIONS ===
+  if (view === 'aiSupplements') {
+    return (
+      <div className="px-5 pt-6 pb-24 animate-fade-in">
+        <button onClick={() => { setView('supplements'); setSuppRecs([]); setSuppError(''); }} className="flex items-center gap-1 text-text-muted text-sm mb-4">
+          <ChevronLeftIcon size={16} /> Back
+        </button>
+        <h1 className="text-xl font-bold mb-4">AI Supplement Advice</h1>
+
+        {!aiStore.isConfigured() ? (
+          <Card className="py-10 text-center">
+            <AlertIcon size={32} color="#FFD740" className="mx-auto mb-3" />
+            <div className="text-sm font-medium mb-1">API Key Required</div>
+            <div className="text-text-muted text-xs">Go to AI Settings to configure your API key.</div>
+          </Card>
+        ) : suppRecs.length > 0 ? (
+          <div className="space-y-3">
+            {suppRecs.map((rec, i) => (
+              <Card key={i}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-sm font-semibold">{rec.name}</div>
+                  <button onClick={() => {
+                    suppStore.addSupplement({ name: rec.name, dosage: rec.dosage, schedule: ['morning'] });
+                  }} className="text-accent text-xs font-medium">+ Add</button>
+                </div>
+                <div className="text-text-secondary text-xs mb-1">{rec.dosage} -- {rec.timing}</div>
+                <div className="text-text-muted text-xs">{rec.reasoning}</div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <>
+            {suppError && (
+              <Card className="mb-4 bg-danger/10">
+                <div className="text-danger text-xs">{suppError}</div>
+              </Card>
+            )}
+            <Card className="py-10 text-center">
+              <WandIcon size={32} color="#FFD740" className="mx-auto mb-3" />
+              <div className="text-sm font-medium mb-1">Get Personalized Recommendations</div>
+              <div className="text-text-muted text-xs mb-4">Based on your goal and current supplements</div>
+              <Button disabled={suppLoading} onClick={async () => {
+                setSuppLoading(true);
+                setSuppError('');
+                try {
+                  const current = suppStore.supplements.filter(s => s.active).map(s => `${s.name} ${s.dosage}`);
+                  const recs = await getSupplementRecommendations(profile.goal, current);
+                  setSuppRecs(recs);
+                } catch (err) {
+                  setSuppError(err instanceof Error ? err.message : 'Failed to get recommendations');
+                }
+                setSuppLoading(false);
+              }}>
+                {suppLoading ? <span className="flex items-center gap-2"><LoaderIcon size={16} color="#000" /> Analyzing...</span> : 'Get Recommendations'}
+              </Button>
+            </Card>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // === LAB RESULTS ===
+  if (view === 'labResults') {
+    return (
+      <div className="px-5 pt-6 pb-24 animate-fade-in">
+        <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
+          <ChevronLeftIcon size={16} /> Back
+        </button>
+        <h1 className="text-xl font-bold mb-1">Lab Results</h1>
+        <p className="text-text-muted text-xs mb-4">Enter your blood work values (leave blank to skip)</p>
+
+        <div className="space-y-2 mb-4">
+          {LAB_MARKERS.map(marker => (
+            <div key={marker.name} className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium truncate">{marker.name}</div>
+                <div className="text-text-muted text-[10px]">{marker.unit}</div>
+              </div>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="--"
+                value={labValues[marker.name] || ''}
+                onChange={e => setLabValues(prev => ({ ...prev, [marker.name]: e.target.value }))}
+                className="!w-24 !py-2 !px-3 text-sm text-center"
+              />
+            </div>
+          ))}
+        </div>
+
+        {!aiStore.isConfigured() ? (
+          <Card className="mb-4 py-6 text-center">
+            <AlertIcon size={24} color="#FFD740" className="mx-auto mb-2" />
+            <div className="text-text-muted text-xs">Configure AI in settings to analyze results.</div>
+          </Card>
+        ) : (
+          <Button fullWidth disabled={labLoading || Object.values(labValues).every(v => !v)} onClick={async () => {
+            setLabLoading(true);
+            setLabError('');
+            try {
+              const values: LabValue[] = LAB_MARKERS
+                .filter(m => labValues[m.name] && Number(labValues[m.name]))
+                .map(m => ({ name: m.name, value: Number(labValues[m.name]), unit: m.unit }));
+              const result = await analyzeLabResults(values);
+              setLabResult(result);
+              setView('labAnalysis');
+            } catch (err) {
+              setLabError(err instanceof Error ? err.message : 'Failed to analyze');
+            }
+            setLabLoading(false);
+          }}>
+            {labLoading ? <span className="flex items-center gap-2"><LoaderIcon size={16} color="#000" /> Analyzing...</span> : <span className="flex items-center gap-2"><SparkleIcon size={16} color="#000" /> Analyze with AI</span>}
+          </Button>
+        )}
+        {labError && <div className="text-danger text-xs mt-2 text-center">{labError}</div>}
+      </div>
+    );
+  }
+
+  // === LAB ANALYSIS RESULTS ===
+  if (view === 'labAnalysis' && labResult) {
+    const statusColors = { normal: '#00E676', low: '#FFD740', high: '#FF9800', critical: '#FF5252' };
+    return (
+      <div className="px-5 pt-6 pb-24 animate-fade-in">
+        <button onClick={() => setView('labResults')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
+          <ChevronLeftIcon size={16} /> Back
+        </button>
+        <h1 className="text-xl font-bold mb-4">Lab Analysis</h1>
+
+        <Card className="mb-4">
+          <div className="text-sm leading-relaxed">{labResult.summary}</div>
+        </Card>
+
+        {labResult.flags.length > 0 && (
+          <>
+            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">Markers</div>
+            <div className="space-y-2 mb-4">
+              {labResult.flags.map((f, i) => (
+                <Card key={i} className="flex items-start gap-3">
+                  <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: statusColors[f.status] || '#9E9E9E' }} />
+                  <div>
+                    <div className="text-sm font-medium">{f.name} <span className="text-text-muted text-xs uppercase">({f.status})</span></div>
+                    <div className="text-text-muted text-xs">{f.note}</div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </>
+        )}
+
+        {labResult.recommendations.length > 0 && (
+          <>
+            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">Recommendations</div>
+            <Card>
+              <ul className="space-y-2">
+                {labResult.recommendations.map((r, i) => (
+                  <li key={i} className="text-sm text-text-secondary flex gap-2">
+                    <span className="text-accent mt-0.5">-</span>
+                    <span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </>
+        )}
+
+        <Card className="mt-4 bg-surface-lighter">
+          <div className="text-text-muted text-[10px] text-center">
+            This analysis is for informational purposes only. Always consult a qualified healthcare professional for medical advice.
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   // === EDIT PROFILE ===
   if (view === 'editProfile') {
@@ -134,9 +437,14 @@ export function Profile() {
         </button>
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold">Supplements</h1>
-          <button onClick={() => setView('addSupplement')} className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
-            <PlusIcon size={20} color="#000" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setView('aiSupplements')} className="w-10 h-10 rounded-xl bg-surface-lighter flex items-center justify-center">
+              <WandIcon size={18} color="#FFD740" />
+            </button>
+            <button onClick={() => setView('addSupplement')} className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
+              <PlusIcon size={20} color="#000" />
+            </button>
+          </div>
         </div>
 
         {checklist.length === 0 ? (
@@ -225,7 +533,6 @@ export function Profile() {
           )}
         </div>
 
-        {/* Timeline bar */}
         {maxWeeks > 0 && cycle.active && (
           <Card className="mb-4">
             <div className="text-xs text-text-muted mb-2">Progress: Week {Math.min(weeksElapsed + 1, maxWeeks)} / {maxWeeks}</div>
@@ -235,7 +542,6 @@ export function Profile() {
           </Card>
         )}
 
-        {/* Compounds */}
         <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">Compounds</div>
         {cycle.compounds.length === 0 ? (
           <Card className="py-6 text-center mb-4">
@@ -255,7 +561,6 @@ export function Profile() {
           </div>
         )}
 
-        {/* Add compound form */}
         <Card className="mb-4">
           <div className="text-xs text-text-muted mb-2">Add Compound</div>
           <div className="space-y-2">
@@ -278,7 +583,6 @@ export function Profile() {
           </Button>
         </Card>
 
-        {/* PCT */}
         <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">PCT</div>
         {pctEntries.length === 0 ? (
           <Card className="py-4 text-center">
@@ -370,14 +674,14 @@ export function Profile() {
         <Card className="mb-4">
           <div className="text-center mb-4">
             <div className="text-2xl font-bold text-accent">FitAI</div>
-            <div className="text-text-muted text-xs mt-1">v2.0.0</div>
+            <div className="text-text-muted text-xs mt-1">v3.0.0</div>
           </div>
           <div className="text-text-secondary text-sm leading-relaxed">
-            AI-powered fitness companion for Telegram. Track nutrition, workouts, progress, supplements, and more -- all in one place.
+            AI-powered fitness companion for Telegram. Track nutrition, workouts, progress, supplements, and more -- all in one place. Now with real AI integration via OpenAI and Google Gemini.
           </div>
         </Card>
         <Card>
-          <div className="text-text-muted text-xs">Built with React, TypeScript, and Zustand. AI features powered by OpenAI (coming soon).</div>
+          <div className="text-text-muted text-xs">Built with React, TypeScript, and Zustand. AI features powered by OpenAI GPT-4o and Google Gemini.</div>
         </Card>
       </div>
     );
@@ -441,6 +745,8 @@ export function Profile() {
 
       <Card className="mb-4">
         {[
+          { label: 'AI Settings', icon: <KeyIcon size={16} color="#00E676" />, action: () => setView('aiSettings') },
+          { label: 'Lab Results', icon: <BeakerIcon size={16} color="#60A5FA" />, action: () => setView('labResults') },
           { label: 'Edit Profile', icon: <EditIcon size={16} color="#9E9E9E" />, action: () => setView('editProfile') },
           { label: 'Supplements & Vitamins', icon: <PillIcon size={16} color="#9E9E9E" />, action: () => setView('supplements') },
           { label: 'Cycle Tracker', icon: <SyringeIcon size={16} color="#9E9E9E" />, action: () => setView('cycles') },
@@ -455,6 +761,16 @@ export function Profile() {
             <ChevronRightIcon size={16} color="#616161" />
           </button>
         ))}
+      </Card>
+
+      {/* AI Status indicator */}
+      <Card className="mb-4 flex items-center gap-3">
+        <SparkleIcon size={16} color={aiStore.isConfigured() ? '#00E676' : '#616161'} />
+        <div className="flex-1">
+          <div className="text-xs font-medium">AI: {aiStore.provider === 'openai' ? 'OpenAI' : 'Gemini'}</div>
+          <div className="text-text-muted text-[10px]">{aiStore.isConfigured() ? 'Configured' : 'Not configured'}</div>
+        </div>
+        <button onClick={() => setView('aiSettings')} className="text-accent text-xs font-medium">Setup</button>
       </Card>
 
       <button

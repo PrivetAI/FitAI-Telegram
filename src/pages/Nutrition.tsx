@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { AIChat } from '../components/AIChat';
 import { useAppStore } from '../stores/appStore';
 import { useNutritionStore } from '../stores/nutritionStore';
-import { SparkleIcon, PlusIcon, TrashIcon, EditIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon } from '../icons';
+import { SparkleIcon, PlusIcon, TrashIcon, EditIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, MessageIcon, LoaderIcon, AlertIcon, XIcon } from '../icons';
+import { analyzeFoodPhoto, nutritionChat, isConfigured } from '../services/ai';
+import type { ChatMessage } from '../services/ai';
 import type { FoodEntry, MealType } from '../types';
 
 const MEAL_LABELS: Record<MealType, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' };
@@ -36,7 +39,7 @@ function MacroBar({ label, current, target, color }: { label: string; current: n
 }
 
 function FoodForm({ initial, onSave, onCancel }: {
-  initial?: FoodEntry;
+  initial?: Partial<FoodEntry>;
   onSave: (data: Omit<FoodEntry, 'id' | 'createdAt'>) => void;
   onCancel: () => void;
 }) {
@@ -93,7 +96,7 @@ function FoodForm({ initial, onSave, onCancel }: {
             date: initial?.date || today(),
           })}
         >
-          {initial ? 'Update' : 'Add Food'}
+          {initial?.id ? 'Update' : 'Add Food'}
         </Button>
       </div>
     </div>
@@ -106,6 +109,12 @@ export function Nutrition() {
   const [viewDate, setViewDate] = useState(today());
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<Partial<FoodEntry> | null>(null);
+  const [scanError, setScanError] = useState('');
+  const [showChat, setShowChat] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   if (!profile) return null;
 
@@ -115,9 +124,124 @@ export function Nutrition() {
     { calories: 0, protein: 0, fat: 0, carbs: 0 }
   );
   const remaining = profile.targetCalories - totals.calories;
-
   const grouped = MEAL_ORDER.map((m) => ({ type: m, items: dayEntries.filter((e) => e.mealType === m) })).filter((g) => g.items.length > 0);
   const isToday = viewDate === today();
+
+  // AI Chat view
+  if (showChat) {
+    const handleNutritionChat = async (messages: ChatMessage[]) => {
+      return nutritionChat(messages, {
+        tdee: profile.tdee,
+        targetCalories: profile.targetCalories,
+        macros: profile.macros,
+        goal: profile.goal,
+        weight: profile.weight,
+      }, totals);
+    };
+    return <AIChat title="Nutrition Coach" onSend={handleNutritionChat} onClose={() => setShowChat(false)} placeholder="Ask about nutrition..." />;
+  }
+
+  // Scanner view
+  if (showScanner) {
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setScanning(true);
+      setScanError('');
+      setScanResult(null);
+
+      try {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const result = await analyzeFoodPhoto(base64, file.type || 'image/jpeg');
+        setScanResult({
+          name: result.name,
+          calories: result.calories,
+          protein: result.protein,
+          fat: result.fat,
+          carbs: result.carbs,
+          portionSize: result.portionSize,
+        });
+      } catch (err) {
+        setScanError(err instanceof Error ? err.message : 'Failed to analyze photo');
+      } finally {
+        setScanning(false);
+      }
+    };
+
+    if (scanResult) {
+      return (
+        <div className="px-5 pt-6 pb-24 animate-fade-in">
+          <h1 className="text-xl font-bold mb-1">AI Analysis Result</h1>
+          <p className="text-text-muted text-xs mb-4">Review and edit before saving</p>
+          <FoodForm
+            initial={scanResult}
+            onSave={(data) => {
+              addEntry({ ...data, date: viewDate });
+              setScanResult(null);
+              setShowScanner(false);
+            }}
+            onCancel={() => { setScanResult(null); setShowScanner(false); }}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="px-5 pt-6 pb-24 animate-fade-in">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-xl font-bold">AI Food Scanner</h1>
+          <button onClick={() => setShowScanner(false)} className="p-2 rounded-lg active:bg-surface-lighter">
+            <XIcon size={20} />
+          </button>
+        </div>
+
+        {!isConfigured() ? (
+          <Card className="py-10 text-center">
+            <AlertIcon size={32} color="#FFD740" className="mx-auto mb-3" />
+            <div className="text-sm font-medium mb-1">API Key Required</div>
+            <div className="text-text-muted text-xs">Go to Profile &gt; AI Settings to configure your API key.</div>
+          </Card>
+        ) : scanning ? (
+          <Card className="py-16 text-center">
+            <LoaderIcon size={32} color="#00E676" className="mx-auto mb-4" />
+            <div className="text-sm font-medium">Analyzing food...</div>
+            <div className="text-text-muted text-xs mt-1">This may take a few seconds</div>
+          </Card>
+        ) : (
+          <>
+            <Card className="py-12 text-center" onClick={() => fileRef.current?.click()}>
+              <CameraIcon size={40} color="#00E676" className="mx-auto mb-4" />
+              <div className="text-sm font-medium mb-1">Take a Photo</div>
+              <div className="text-text-muted text-xs">Tap to capture or select a food photo</div>
+            </Card>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFile}
+              className="hidden"
+            />
+            {scanError && (
+              <Card className="mt-4 bg-danger/10">
+                <div className="text-danger text-xs">{scanError}</div>
+              </Card>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
 
   if (showForm || editingEntry) {
     return (
@@ -147,9 +271,14 @@ export function Nutrition() {
           <h1 className="text-xl font-bold">Nutrition</h1>
           <p className="text-text-muted text-sm mt-1">Track your meals</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center active:scale-95 transition-transform">
-          <PlusIcon size={20} color="#000" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowChat(true)} className="w-10 h-10 rounded-xl bg-surface-lighter flex items-center justify-center active:scale-95 transition-transform">
+            <MessageIcon size={18} color="#00E676" />
+          </button>
+          <button onClick={() => setShowForm(true)} className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center active:scale-95 transition-transform">
+            <PlusIcon size={20} color="#000" />
+          </button>
+        </div>
       </div>
 
       {/* Date nav */}
@@ -192,7 +321,7 @@ export function Nutrition() {
       </Card>
 
       {/* AI Scan button */}
-      <Card className="mb-4 flex items-center gap-4" onClick={() => {}}>
+      <Card className="mb-4 flex items-center gap-4" onClick={() => setShowScanner(true)}>
         <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0">
           <CameraIcon size={22} color="#00E676" />
         </div>
