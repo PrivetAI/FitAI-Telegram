@@ -1,34 +1,50 @@
 import { useState } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAppStore } from '../stores/appStore';
 import { useSupplementStore } from '../stores/supplementStore';
 import { useCycleStore } from '../stores/cycleStore';
 import { useAIStore } from '../stores/aiStore';
+import { useLangStore } from '../stores/langStore';
+import { useToastStore } from '../stores/toastStore';
+import { useTranslation } from '../i18n';
+import { useTelegram } from '../hooks/useTelegram';
 import {
   ProfileIcon, ChevronRightIcon, ChevronLeftIcon, PillIcon, SyringeIcon,
   CheckIcon, PlusIcon, TrashIcon, EditIcon, DownloadIcon, InfoIcon,
-  KeyIcon, SparkleIcon, LoaderIcon, AlertIcon, BeakerIcon, WandIcon,
+  KeyIcon, SparkleIcon, LoaderIcon, AlertIcon, BeakerIcon, WandIcon, GlobeIcon,
 } from '../icons';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacros } from '../utils/tdee';
 import { testConnection, getSupplementRecommendations, analyzeLabResults } from '../services/ai';
 import type { SupplementRecommendation, LabValue, LabAnalysisResult } from '../services/ai';
 import type { Supplement, SupplementSchedule, SteroidCycle, CycleFrequency } from '../types';
 
-const goalLabels = {
-  lose_weight: 'Lose Weight',
-  gain_muscle: 'Build Muscle',
-  maintain: 'Maintain',
-  recomp: 'Recomposition',
-};
-
-const SCHEDULE_LABELS: Record<SupplementSchedule, string> = {
-  morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening', with_meal: 'With Meal', before_bed: 'Before Bed',
-};
-
-const FREQ_LABELS: Record<CycleFrequency, string> = {
-  daily: 'Daily', eod: 'Every Other Day', e3d: 'Every 3 Days', weekly: 'Weekly', biweekly: 'Bi-weekly',
-};
+const LAB_MARKERS = [
+  { name: 'Total Testosterone', unit: 'ng/dL', key: 'labs.testosterone' },
+  { name: 'Free Testosterone', unit: 'pg/mL', key: 'labs.free_testosterone' },
+  { name: 'Estradiol (E2)', unit: 'pg/mL', key: 'labs.estrogen' },
+  { name: 'LH', unit: 'mIU/mL', key: 'labs.lh' },
+  { name: 'FSH', unit: 'mIU/mL', key: 'labs.fsh' },
+  { name: 'SHBG', unit: 'nmol/L', key: 'labs.shbg' },
+  { name: 'TSH', unit: 'mIU/L', key: 'labs.tsh' },
+  { name: 'ALT', unit: 'U/L', key: 'labs.alt' },
+  { name: 'AST', unit: 'U/L', key: 'labs.ast' },
+  { name: 'Total Cholesterol', unit: 'mg/dL', key: 'labs.total_cholesterol' },
+  { name: 'LDL', unit: 'mg/dL', key: 'labs.ldl' },
+  { name: 'HDL', unit: 'mg/dL', key: 'labs.hdl' },
+  { name: 'Triglycerides', unit: 'mg/dL', key: 'labs.triglycerides' },
+  { name: 'Hemoglobin', unit: 'g/dL', key: 'labs.hemoglobin' },
+  { name: 'Hematocrit', unit: '%', key: 'labs.hematocrit' },
+  { name: 'RBC', unit: 'M/uL', key: 'labs.rbc' },
+  { name: 'WBC', unit: 'K/uL', key: 'labs.wbc' },
+  { name: 'Platelets', unit: 'K/uL', key: 'labs.platelets' },
+  { name: 'Creatinine', unit: 'mg/dL', key: 'labs.creatinine' },
+  { name: 'Fasting Glucose', unit: 'mg/dL', key: 'labs.fasting_glucose' },
+  { name: 'HbA1c', unit: '%', key: 'labs.hba1c' },
+  { name: 'Vitamin D', unit: 'ng/mL', key: 'labs.vitamin_d' },
+  { name: 'Ferritin', unit: 'ng/mL', key: 'labs.ferritin' },
+];
 
 const OPENAI_MODELS = [
   { value: 'gpt-4o', label: 'GPT-4o' },
@@ -40,39 +56,17 @@ const GEMINI_MODELS = [
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
 ];
 
-const LAB_MARKERS = [
-  { name: 'Total Testosterone', unit: 'ng/dL' },
-  { name: 'Free Testosterone', unit: 'pg/mL' },
-  { name: 'Estradiol (E2)', unit: 'pg/mL' },
-  { name: 'LH', unit: 'mIU/mL' },
-  { name: 'FSH', unit: 'mIU/mL' },
-  { name: 'SHBG', unit: 'nmol/L' },
-  { name: 'TSH', unit: 'mIU/L' },
-  { name: 'ALT', unit: 'U/L' },
-  { name: 'AST', unit: 'U/L' },
-  { name: 'Total Cholesterol', unit: 'mg/dL' },
-  { name: 'LDL', unit: 'mg/dL' },
-  { name: 'HDL', unit: 'mg/dL' },
-  { name: 'Triglycerides', unit: 'mg/dL' },
-  { name: 'Hemoglobin', unit: 'g/dL' },
-  { name: 'Hematocrit', unit: '%' },
-  { name: 'RBC', unit: 'M/uL' },
-  { name: 'WBC', unit: 'K/uL' },
-  { name: 'Platelets', unit: 'K/uL' },
-  { name: 'Creatinine', unit: 'mg/dL' },
-  { name: 'Fasting Glucose', unit: 'mg/dL' },
-  { name: 'HbA1c', unit: '%' },
-  { name: 'Vitamin D', unit: 'ng/mL' },
-  { name: 'Ferritin', unit: 'ng/mL' },
-];
-
-type View = 'main' | 'editProfile' | 'supplements' | 'addSupplement' | 'cycles' | 'addCycle' | 'cycleDetail' | 'about' | 'aiSettings' | 'aiSupplements' | 'labResults' | 'labAnalysis';
+type View = 'main' | 'editProfile' | 'supplements' | 'addSupplement' | 'cycles' | 'addCycle' | 'cycleDetail' | 'about' | 'aiSettings' | 'aiSupplements' | 'labResults' | 'labAnalysis' | 'language';
 
 export function Profile() {
+  const { t } = useTranslation();
+  const { haptic } = useTelegram();
   const { profile, setProfile, setOnboarded } = useAppStore();
   const suppStore = useSupplementStore();
   const cycleStore = useCycleStore();
   const aiStore = useAIStore();
+  const langStore = useLangStore();
+  const addToast = useToastStore((s) => s.addToast);
   const [view, setView] = useState<View>('main');
   const [editData, setEditData] = useState({ age: '', height: '', weight: '' });
   const [suppForm, setSuppForm] = useState({ name: '', dosage: '', schedule: [] as SupplementSchedule[], notes: '' });
@@ -80,18 +74,18 @@ export function Profile() {
   const [compoundForm, setCompoundForm] = useState({ name: '', dosage: '', frequency: 'weekly' as CycleFrequency, durationWeeks: '' });
   const [selectedCycle, setSelectedCycle] = useState<SteroidCycle | null>(null);
   const [editingSupplement, setEditingSupplement] = useState<Supplement | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmEndCycle, setConfirmEndCycle] = useState(false);
+  const [confirmDeleteSupp, setConfirmDeleteSupp] = useState<string | null>(null);
 
-  // AI Settings state
   const [aiKeyInput, setAiKeyInput] = useState(aiStore.getApiKey());
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'fail' | ''>('');
 
-  // AI Supplements state
   const [suppLoading, setSuppLoading] = useState(false);
   const [suppRecs, setSuppRecs] = useState<SupplementRecommendation[]>([]);
   const [suppError, setSuppError] = useState('');
 
-  // Lab results state
   const [labValues, setLabValues] = useState<Record<string, string>>({});
   const [labLoading, setLabLoading] = useState(false);
   const [labResult, setLabResult] = useState<LabAnalysisResult | null>(null);
@@ -99,18 +93,64 @@ export function Profile() {
 
   if (!profile) return null;
 
+  const goalLabels: Record<string, string> = {
+    lose_weight: t('profile.goal_lose'),
+    gain_muscle: t('profile.goal_gain'),
+    maintain: t('profile.goal_maintain'),
+    recomp: t('profile.goal_recomp'),
+  };
+
+  const SCHEDULE_LABELS: Record<SupplementSchedule, string> = {
+    morning: t('supplements.schedule_morning'),
+    afternoon: t('supplements.schedule_afternoon'),
+    evening: t('supplements.schedule_evening'),
+    with_meal: t('supplements.schedule_with_meal'),
+    before_bed: t('supplements.schedule_before_bed'),
+  };
+
+  const FREQ_LABELS: Record<CycleFrequency, string> = {
+    daily: t('cycles.freq_daily'),
+    eod: t('cycles.freq_eod'),
+    e3d: t('cycles.freq_e3d'),
+    weekly: t('cycles.freq_weekly'),
+    biweekly: t('cycles.freq_biweekly'),
+  };
+
+  // === LANGUAGE ===
+  if (view === 'language') {
+    return (
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
+        <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
+          <ChevronLeftIcon size={16} /> {t('common.back')}
+        </button>
+        <h1 className="text-xl font-bold mb-4">{t('profile.language')}</h1>
+        <div className="space-y-2">
+          {([{ code: 'en' as const, label: 'English' }, { code: 'ru' as const, label: 'Русский' }]).map(({ code, label }) => (
+            <Card
+              key={code}
+              onClick={() => { langStore.setLanguage(code); haptic('light'); }}
+              className={`flex items-center justify-between ${langStore.language === code ? 'border-accent/50' : ''}`}
+            >
+              <span className="text-sm font-medium">{label}</span>
+              {langStore.language === code && <CheckIcon size={18} color="#00E676" />}
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // === AI SETTINGS ===
   if (view === 'aiSettings') {
     const models = aiStore.provider === 'openai' ? OPENAI_MODELS : GEMINI_MODELS;
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
-        <h1 className="text-xl font-bold mb-4">AI Settings</h1>
-
+        <h1 className="text-xl font-bold mb-4">{t('profile.ai_settings')}</h1>
         <Card className="mb-4">
-          <div className="text-text-muted text-xs mb-2">Provider</div>
+          <div className="text-text-muted text-xs mb-2">{t('ai.provider')}</div>
           <div className="grid grid-cols-2 gap-2 mb-4">
             {(['openai', 'gemini'] as const).map(p => (
               <button key={p} onClick={() => { aiStore.setProvider(p); setAiKeyInput(localStorage.getItem(`fitai-ai-key-${p}`) || ''); }}
@@ -119,8 +159,7 @@ export function Profile() {
               </button>
             ))}
           </div>
-
-          <div className="text-text-muted text-xs mb-2">Model</div>
+          <div className="text-text-muted text-xs mb-2">{t('ai.model')}</div>
           <div className="grid grid-cols-2 gap-2 mb-4">
             {models.map(m => (
               <button key={m.value} onClick={() => aiStore.setModel(m.value as typeof aiStore.model)}
@@ -129,41 +168,25 @@ export function Profile() {
               </button>
             ))}
           </div>
-
-          <div className="text-text-muted text-xs mb-2">API Key</div>
-          <input
-            type="password"
-            placeholder={aiStore.provider === 'openai' ? 'sk-...' : 'AI...'}
-            value={aiKeyInput}
-            onChange={e => setAiKeyInput(e.target.value)}
-            className="mb-3"
-          />
+          <div className="text-text-muted text-xs mb-2">{t('ai.api_key')}</div>
+          <input type="password" placeholder={aiStore.provider === 'openai' ? 'sk-...' : 'AI...'} value={aiKeyInput} onChange={e => setAiKeyInput(e.target.value)} className="mb-3" />
           <div className="text-text-muted text-[10px] mb-4">
-            Your key is stored locally and never sent to our servers. API calls go directly to {aiStore.provider === 'openai' ? 'OpenAI' : 'Google'}.
+            {t('ai.key_notice')} {t('ai.calls_direct')} {aiStore.provider === 'openai' ? 'OpenAI' : 'Google'}.
           </div>
-
           <div className="flex gap-3">
             <Button variant="secondary" fullWidth disabled={!aiKeyInput || testing} onClick={async () => {
-              aiStore.setApiKey(aiKeyInput);
-              setTesting(true);
-              setTestResult('');
-              try {
-                const ok = await testConnection();
-                setTestResult(ok ? 'success' : 'fail');
-              } catch {
-                setTestResult('fail');
-              }
+              aiStore.setApiKey(aiKeyInput); setTesting(true); setTestResult('');
+              try { const ok = await testConnection(); setTestResult(ok ? 'success' : 'fail'); } catch { setTestResult('fail'); }
               setTesting(false);
             }}>
-              {testing ? <LoaderIcon size={16} /> : 'Test Connection'}
+              {testing ? <LoaderIcon size={16} /> : t('ai.test_connection')}
             </Button>
-            <Button fullWidth onClick={() => { aiStore.setApiKey(aiKeyInput); setView('main'); }}>
-              Save
+            <Button fullWidth onClick={() => { aiStore.setApiKey(aiKeyInput); haptic('medium'); addToast(t('toast.saved')); setView('main'); }}>
+              {t('common.save')}
             </Button>
           </div>
-
-          {testResult === 'success' && <div className="text-accent text-xs mt-3 text-center">Connection successful</div>}
-          {testResult === 'fail' && <div className="text-danger text-xs mt-3 text-center">Connection failed. Check your API key.</div>}
+          {testResult === 'success' && <div className="text-accent text-xs mt-3 text-center">{t('ai.test_success')}</div>}
+          {testResult === 'fail' && <div className="text-danger text-xs mt-3 text-center">{t('ai.test_fail')}</div>}
         </Card>
       </div>
     );
@@ -172,57 +195,49 @@ export function Profile() {
   // === AI SUPPLEMENT RECOMMENDATIONS ===
   if (view === 'aiSupplements') {
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => { setView('supplements'); setSuppRecs([]); setSuppError(''); }} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
-        <h1 className="text-xl font-bold mb-4">AI Supplement Advice</h1>
-
+        <h1 className="text-xl font-bold mb-4">{t('supplements.ai_advice')}</h1>
         {!aiStore.isConfigured() ? (
           <Card className="py-10 text-center">
             <AlertIcon size={32} color="#FFD740" className="mx-auto mb-3" />
-            <div className="text-sm font-medium mb-1">API Key Required</div>
-            <div className="text-text-muted text-xs">Go to AI Settings to configure your API key.</div>
+            <div className="text-sm font-medium mb-1">{t('ai.no_key')}</div>
+            <div className="text-text-muted text-xs">{t('ai.setup_key')}</div>
           </Card>
         ) : suppRecs.length > 0 ? (
           <div className="space-y-3">
             {suppRecs.map((rec, i) => (
-              <Card key={i}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-sm font-semibold">{rec.name}</div>
-                  <button onClick={() => {
-                    suppStore.addSupplement({ name: rec.name, dosage: rec.dosage, schedule: ['morning'] });
-                  }} className="text-accent text-xs font-medium">+ Add</button>
-                </div>
-                <div className="text-text-secondary text-xs mb-1">{rec.dosage} -- {rec.timing}</div>
-                <div className="text-text-muted text-xs">{rec.reasoning}</div>
-              </Card>
+              <div key={i} className={`animate-stagger-in stagger-${Math.min(i + 1, 8)}`}>
+                <Card>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-sm font-semibold">{rec.name}</div>
+                    <button onClick={() => { suppStore.addSupplement({ name: rec.name, dosage: rec.dosage, schedule: ['morning'] }); haptic('light'); addToast(t('toast.supplement_added')); }} className="text-accent text-xs font-medium">{t('supplements.add_to_list')}</button>
+                  </div>
+                  <div className="text-text-secondary text-xs mb-1">{rec.dosage} -- {rec.timing}</div>
+                  <div className="text-text-muted text-xs">{rec.reasoning}</div>
+                </Card>
+              </div>
             ))}
           </div>
         ) : (
           <>
-            {suppError && (
-              <Card className="mb-4 bg-danger/10">
-                <div className="text-danger text-xs">{suppError}</div>
-              </Card>
-            )}
+            {suppError && <Card className="mb-4 bg-danger/10"><div className="text-danger text-xs">{suppError}</div></Card>}
             <Card className="py-10 text-center">
               <WandIcon size={32} color="#FFD740" className="mx-auto mb-3" />
-              <div className="text-sm font-medium mb-1">Get Personalized Recommendations</div>
-              <div className="text-text-muted text-xs mb-4">Based on your goal and current supplements</div>
+              <div className="text-sm font-medium mb-1">{t('supplements.ai_advice_subtitle')}</div>
+              <div className="text-text-muted text-xs mb-4">{t('supplements.ai_advice_desc')}</div>
               <Button disabled={suppLoading} onClick={async () => {
-                setSuppLoading(true);
-                setSuppError('');
+                setSuppLoading(true); setSuppError('');
                 try {
                   const current = suppStore.supplements.filter(s => s.active).map(s => `${s.name} ${s.dosage}`);
                   const recs = await getSupplementRecommendations(profile.goal, current);
                   setSuppRecs(recs);
-                } catch (err) {
-                  setSuppError(err instanceof Error ? err.message : 'Failed to get recommendations');
-                }
+                } catch (err) { setSuppError(err instanceof Error ? err.message : t('common.error')); }
                 setSuppLoading(false);
               }}>
-                {suppLoading ? <span className="flex items-center gap-2"><LoaderIcon size={16} color="#000" /> Analyzing...</span> : 'Get Recommendations'}
+                {suppLoading ? <span className="flex items-center gap-2"><LoaderIcon size={16} color="#000" /> {t('ai.analyzing')}</span> : t('supplements.get_recs')}
               </Button>
             </Card>
           </>
@@ -234,54 +249,39 @@ export function Profile() {
   // === LAB RESULTS ===
   if (view === 'labResults') {
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
-        <h1 className="text-xl font-bold mb-1">Lab Results</h1>
-        <p className="text-text-muted text-xs mb-4">Enter your blood work values (leave blank to skip)</p>
-
+        <h1 className="text-xl font-bold mb-1">{t('labs.title')}</h1>
+        <p className="text-text-muted text-xs mb-4">{t('labs.subtitle')}</p>
         <div className="space-y-2 mb-4">
           {LAB_MARKERS.map(marker => (
             <div key={marker.name} className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium truncate">{marker.name}</div>
+                <div className="text-xs font-medium truncate">{t(marker.key)}</div>
                 <div className="text-text-muted text-[10px]">{marker.unit}</div>
               </div>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="--"
-                value={labValues[marker.name] || ''}
-                onChange={e => setLabValues(prev => ({ ...prev, [marker.name]: e.target.value }))}
-                className="!w-24 !py-2 !px-3 text-sm text-center"
-              />
+              <input type="number" inputMode="decimal" placeholder="--" value={labValues[marker.name] || ''} onChange={e => setLabValues(prev => ({ ...prev, [marker.name]: e.target.value }))} className="!w-24 !py-2 !px-3 text-sm text-center" />
             </div>
           ))}
         </div>
-
         {!aiStore.isConfigured() ? (
           <Card className="mb-4 py-6 text-center">
             <AlertIcon size={24} color="#FFD740" className="mx-auto mb-2" />
-            <div className="text-text-muted text-xs">Configure AI in settings to analyze results.</div>
+            <div className="text-text-muted text-xs">{t('labs.configure_ai')}</div>
           </Card>
         ) : (
           <Button fullWidth disabled={labLoading || Object.values(labValues).every(v => !v)} onClick={async () => {
-            setLabLoading(true);
-            setLabError('');
+            setLabLoading(true); setLabError('');
             try {
-              const values: LabValue[] = LAB_MARKERS
-                .filter(m => labValues[m.name] && Number(labValues[m.name]))
-                .map(m => ({ name: m.name, value: Number(labValues[m.name]), unit: m.unit }));
+              const values: LabValue[] = LAB_MARKERS.filter(m => labValues[m.name] && Number(labValues[m.name])).map(m => ({ name: m.name, value: Number(labValues[m.name]), unit: m.unit }));
               const result = await analyzeLabResults(values);
-              setLabResult(result);
-              setView('labAnalysis');
-            } catch (err) {
-              setLabError(err instanceof Error ? err.message : 'Failed to analyze');
-            }
+              setLabResult(result); setView('labAnalysis');
+            } catch (err) { setLabError(err instanceof Error ? err.message : t('common.error')); }
             setLabLoading(false);
           }}>
-            {labLoading ? <span className="flex items-center gap-2"><LoaderIcon size={16} color="#000" /> Analyzing...</span> : <span className="flex items-center gap-2"><SparkleIcon size={16} color="#000" /> Analyze with AI</span>}
+            {labLoading ? <span className="flex items-center gap-2"><LoaderIcon size={16} color="#000" /> {t('labs.analyzing')}</span> : <span className="flex items-center gap-2"><SparkleIcon size={16} color="#000" /> {t('labs.analyze')}</span>}
           </Button>
         )}
         {labError && <div className="text-danger text-xs mt-2 text-center">{labError}</div>}
@@ -289,57 +289,48 @@ export function Profile() {
     );
   }
 
-  // === LAB ANALYSIS RESULTS ===
+  // === LAB ANALYSIS ===
   if (view === 'labAnalysis' && labResult) {
     const statusColors = { normal: '#00E676', low: '#FFD740', high: '#FF9800', critical: '#FF5252' };
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => setView('labResults')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
-        <h1 className="text-xl font-bold mb-4">Lab Analysis</h1>
-
-        <Card className="mb-4">
-          <div className="text-sm leading-relaxed">{labResult.summary}</div>
-        </Card>
-
+        <h1 className="text-xl font-bold mb-4">{t('labs.analysis_title')}</h1>
+        <Card className="mb-4"><div className="text-sm leading-relaxed">{labResult.summary}</div></Card>
         {labResult.flags.length > 0 && (
           <>
-            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">Markers</div>
+            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{t('labs.markers')}</div>
             <div className="space-y-2 mb-4">
               {labResult.flags.map((f, i) => (
-                <Card key={i} className="flex items-start gap-3">
-                  <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: statusColors[f.status] || '#9E9E9E' }} />
-                  <div>
-                    <div className="text-sm font-medium">{f.name} <span className="text-text-muted text-xs uppercase">({f.status})</span></div>
-                    <div className="text-text-muted text-xs">{f.note}</div>
-                  </div>
-                </Card>
+                <div key={i} className={`animate-stagger-in stagger-${Math.min(i + 1, 8)}`}>
+                  <Card className="flex items-start gap-3">
+                    <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: statusColors[f.status] || '#9E9E9E' }} />
+                    <div>
+                      <div className="text-sm font-medium">{f.name} <span className="text-text-muted text-xs uppercase">({f.status})</span></div>
+                      <div className="text-text-muted text-xs">{f.note}</div>
+                    </div>
+                  </Card>
+                </div>
               ))}
             </div>
           </>
         )}
-
         {labResult.recommendations.length > 0 && (
           <>
-            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">Recommendations</div>
+            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{t('labs.recommendations')}</div>
             <Card>
               <ul className="space-y-2">
                 {labResult.recommendations.map((r, i) => (
-                  <li key={i} className="text-sm text-text-secondary flex gap-2">
-                    <span className="text-accent mt-0.5">-</span>
-                    <span>{r}</span>
-                  </li>
+                  <li key={i} className="text-sm text-text-secondary flex gap-2"><span className="text-accent mt-0.5">-</span><span>{r}</span></li>
                 ))}
               </ul>
             </Card>
           </>
         )}
-
         <Card className="mt-4 bg-surface-lighter">
-          <div className="text-text-muted text-[10px] text-center">
-            This analysis is for informational purposes only. Always consult a qualified healthcare professional for medical advice.
-          </div>
+          <div className="text-text-muted text-[10px] text-center">{t('labs.disclaimer')}</div>
         </Card>
       </div>
     );
@@ -348,15 +339,15 @@ export function Profile() {
   // === EDIT PROFILE ===
   if (view === 'editProfile') {
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
-        <h1 className="text-xl font-bold mb-4">Edit Profile</h1>
+        <h1 className="text-xl font-bold mb-4">{t('profile.edit_profile')}</h1>
         <div className="space-y-3 mb-4">
-          <input type="number" inputMode="numeric" placeholder={`Age (${profile.age})`} value={editData.age} onChange={(e) => setEditData({ ...editData, age: e.target.value })} />
-          <input type="number" inputMode="decimal" placeholder={`Height cm (${profile.height})`} value={editData.height} onChange={(e) => setEditData({ ...editData, height: e.target.value })} />
-          <input type="number" inputMode="decimal" placeholder={`Weight kg (${profile.weight})`} value={editData.weight} onChange={(e) => setEditData({ ...editData, weight: e.target.value })} />
+          <input type="number" inputMode="numeric" placeholder={`${t('onboarding.age')} (${profile.age})`} value={editData.age} onChange={(e) => setEditData({ ...editData, age: e.target.value })} />
+          <input type="number" inputMode="decimal" placeholder={`${t('onboarding.height')} (${profile.height})`} value={editData.height} onChange={(e) => setEditData({ ...editData, height: e.target.value })} />
+          <input type="number" inputMode="decimal" placeholder={`${t('onboarding.weight')} (${profile.weight})`} value={editData.weight} onChange={(e) => setEditData({ ...editData, weight: e.target.value })} />
         </div>
         <Button fullWidth onClick={() => {
           const age = Number(editData.age) || profile.age;
@@ -367,10 +358,10 @@ export function Profile() {
           const targetCalories = calculateTargetCalories(tdee, profile.goal);
           const macros = calculateMacros(targetCalories, weight, profile.goal);
           setProfile({ ...profile, age, height, weight, tdee, targetCalories, macros });
-          setEditData({ age: '', height: '', weight: '' });
-          setView('main');
+          haptic('medium'); addToast(t('toast.profile_updated'));
+          setEditData({ age: '', height: '', weight: '' }); setView('main');
         }}>
-          Save & Recalculate
+          {t('profile.save_recalculate')}
         </Button>
       </div>
     );
@@ -385,44 +376,35 @@ export function Profile() {
       : setSuppForm;
 
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => { setView('supplements'); setEditingSupplement(null); }} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
-        <h1 className="text-xl font-bold mb-4">{isEdit ? 'Edit' : 'Add'} Supplement</h1>
+        <h1 className="text-xl font-bold mb-4">{isEdit ? t('supplements.edit') : t('supplements.add')}</h1>
         <div className="space-y-3 mb-4">
-          <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input placeholder="Dosage (e.g. 5g, 1000mg)" value={form.dosage} onChange={(e) => setForm({ ...form, dosage: e.target.value })} />
+          <input placeholder={t('supplements.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input placeholder={t('supplements.dosage_placeholder')} value={form.dosage} onChange={(e) => setForm({ ...form, dosage: e.target.value })} />
           <div>
-            <div className="text-text-muted text-xs mb-2">Schedule</div>
+            <div className="text-text-muted text-xs mb-2">{t('supplements.schedule')}</div>
             <div className="flex flex-wrap gap-2">
               {(Object.keys(SCHEDULE_LABELS) as SupplementSchedule[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    const has = form.schedule.includes(s);
-                    setForm({ ...form, schedule: has ? form.schedule.filter((x) => x !== s) : [...form.schedule, s] });
-                  }}
-                  className={`py-1.5 px-3 rounded-lg text-xs font-medium ${form.schedule.includes(s) ? 'bg-accent text-black' : 'bg-surface-lighter text-text-secondary'}`}
-                >
+                <button key={s} onClick={() => {
+                  const has = form.schedule.includes(s);
+                  setForm({ ...form, schedule: has ? form.schedule.filter((x) => x !== s) : [...form.schedule, s] });
+                }} className={`py-1.5 px-3 rounded-lg text-xs font-medium transition-colors ${form.schedule.includes(s) ? 'bg-accent text-black' : 'bg-surface-lighter text-text-secondary'}`}>
                   {SCHEDULE_LABELS[s]}
                 </button>
               ))}
             </div>
           </div>
-          <input placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <input placeholder={t('supplements.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
         <Button fullWidth disabled={!form.name || !form.dosage} onClick={() => {
-          if (isEdit) {
-            suppStore.updateSupplement(editingSupplement!.id, { name: form.name, dosage: form.dosage, schedule: form.schedule, notes: form.notes || undefined });
-            setEditingSupplement(null);
-          } else {
-            suppStore.addSupplement({ name: form.name, dosage: form.dosage, schedule: form.schedule, notes: form.notes || undefined });
-            setSuppForm({ name: '', dosage: '', schedule: [], notes: '' });
-          }
-          setView('supplements');
+          if (isEdit) { suppStore.updateSupplement(editingSupplement!.id, { name: form.name, dosage: form.dosage, schedule: form.schedule, notes: form.notes || undefined }); setEditingSupplement(null); }
+          else { suppStore.addSupplement({ name: form.name, dosage: form.dosage, schedule: form.schedule, notes: form.notes || undefined }); setSuppForm({ name: '', dosage: '', schedule: [], notes: '' }); }
+          haptic('medium'); addToast(t('toast.saved')); setView('supplements');
         }}>
-          {isEdit ? 'Update' : 'Add Supplement'}
+          {isEdit ? t('supplements.update_supplement') : t('supplements.add_supplement')}
         </Button>
       </div>
     );
@@ -431,51 +413,54 @@ export function Profile() {
   if (view === 'supplements') {
     const checklist = suppStore.getTodayChecklist();
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
+        <ConfirmDialog
+          open={!!confirmDeleteSupp}
+          title={t('supplements.delete_title')}
+          message={t('supplements.delete_msg')}
+          danger confirmLabel={t('common.delete')}
+          onConfirm={() => { suppStore.deleteSupplement(confirmDeleteSupp!); haptic('medium'); addToast(t('toast.deleted'), 'info'); setConfirmDeleteSupp(null); }}
+          onCancel={() => setConfirmDeleteSupp(null)}
+        />
         <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold">Supplements</h1>
+          <h1 className="text-xl font-bold">{t('supplements.title')}</h1>
           <div className="flex items-center gap-2">
-            <button onClick={() => setView('aiSupplements')} className="w-10 h-10 rounded-xl bg-surface-lighter flex items-center justify-center">
-              <WandIcon size={18} color="#FFD740" />
-            </button>
-            <button onClick={() => setView('addSupplement')} className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
-              <PlusIcon size={20} color="#000" />
-            </button>
+            <button onClick={() => setView('aiSupplements')} className="w-10 h-10 rounded-xl bg-surface-lighter flex items-center justify-center"><WandIcon size={18} color="#FFD740" /></button>
+            <button onClick={() => setView('addSupplement')} className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center"><PlusIcon size={20} color="#000" /></button>
           </div>
         </div>
-
         {checklist.length === 0 ? (
           <Card className="py-10 text-center">
             <PillIcon size={32} color="#616161" className="mx-auto mb-3" />
-            <div className="text-text-muted text-sm">No supplements added</div>
-            <div className="text-text-muted text-xs mt-1">Tap + to add your first</div>
+            <div className="text-text-muted text-sm">{t('supplements.no_supplements')}</div>
+            <div className="text-text-muted text-xs mt-1">{t('supplements.no_supplements_desc')}</div>
           </Card>
         ) : (
           <>
-            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">Today's Checklist</div>
+            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{t('supplements.today_checklist')}</div>
             <div className="space-y-2 mb-4">
-              {checklist.map((s) => (
-                <Card key={s.id} className="flex items-center gap-3">
-                  <button
-                    onClick={() => suppStore.toggleTaken(s.id)}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${s.taken ? 'bg-accent' : 'bg-surface-lighter'}`}
-                  >
-                    <CheckIcon size={14} color={s.taken ? '#000' : '#616161'} />
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-medium ${s.taken ? 'line-through text-text-muted' : ''}`}>{s.name}</div>
-                    <div className="text-text-muted text-xs">{s.dosage} &middot; {s.schedule.map((sc) => SCHEDULE_LABELS[sc]).join(', ')}</div>
-                  </div>
-                  <button onClick={() => setEditingSupplement(s)} className="p-1.5"><EditIcon size={14} color="#616161" /></button>
-                  <button onClick={() => suppStore.deleteSupplement(s.id)} className="p-1.5"><TrashIcon size={14} color="#FF5252" /></button>
-                </Card>
+              {checklist.map((s, i) => (
+                <div key={s.id} className={`animate-stagger-in stagger-${Math.min(i + 1, 8)}`}>
+                  <Card className="flex items-center gap-3">
+                    <button onClick={() => { suppStore.toggleTaken(s.id); haptic('light'); }}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${s.taken ? 'bg-accent' : 'bg-surface-lighter'}`}>
+                      <CheckIcon size={14} color={s.taken ? '#000' : '#616161'} />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-medium ${s.taken ? 'line-through text-text-muted' : ''}`}>{s.name}</div>
+                      <div className="text-text-muted text-xs">{s.dosage} &middot; {s.schedule.map((sc) => SCHEDULE_LABELS[sc]).join(', ')}</div>
+                    </div>
+                    <button onClick={() => setEditingSupplement(s)} className="p-1.5"><EditIcon size={14} color="#616161" /></button>
+                    <button onClick={() => setConfirmDeleteSupp(s.id)} className="p-1.5"><TrashIcon size={14} color="#FF5252" /></button>
+                  </Card>
+                </div>
               ))}
             </div>
             <div className="text-text-muted text-xs text-center">
-              {checklist.filter((s) => s.taken).length}/{checklist.length} taken today
+              {checklist.filter((s) => s.taken).length}/{checklist.length} {t('supplements.taken_today')}
             </div>
           </>
         )}
@@ -486,22 +471,22 @@ export function Profile() {
   // === CYCLES ===
   if (view === 'addCycle') {
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => setView('cycles')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
-        <h1 className="text-xl font-bold mb-4">New Cycle</h1>
+        <h1 className="text-xl font-bold mb-4">{t('cycles.add_cycle')}</h1>
         <div className="space-y-3 mb-4">
-          <input placeholder="Cycle name" value={cycleForm.name} onChange={(e) => setCycleForm({ ...cycleForm, name: e.target.value })} />
+          <input placeholder={t('cycles.cycle_name')} value={cycleForm.name} onChange={(e) => setCycleForm({ ...cycleForm, name: e.target.value })} />
           <input type="date" value={cycleForm.startDate} onChange={(e) => setCycleForm({ ...cycleForm, startDate: e.target.value })} />
-          <input placeholder="Notes (optional)" value={cycleForm.notes} onChange={(e) => setCycleForm({ ...cycleForm, notes: e.target.value })} />
+          <input placeholder={t('cycles.notes')} value={cycleForm.notes} onChange={(e) => setCycleForm({ ...cycleForm, notes: e.target.value })} />
         </div>
         <Button fullWidth disabled={!cycleForm.name || !cycleForm.startDate} onClick={() => {
           cycleStore.addCycle({ name: cycleForm.name, compounds: [], startDate: cycleForm.startDate, notes: cycleForm.notes || undefined });
-          setCycleForm({ name: '', startDate: '', notes: '' });
-          setView('cycles');
+          haptic('medium'); addToast(t('toast.cycle_created'));
+          setCycleForm({ name: '', startDate: '', notes: '' }); setView('cycles');
         }}>
-          Create Cycle
+          {t('cycles.create')}
         </Button>
       </div>
     );
@@ -515,38 +500,44 @@ export function Profile() {
     const weeksElapsed = Math.floor((Date.now() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
 
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
+        <ConfirmDialog
+          open={confirmEndCycle}
+          title={t('cycles.end_cycle_title')}
+          message={t('cycles.end_cycle_msg')}
+          danger confirmLabel={t('cycles.end_cycle')}
+          onConfirm={() => { cycleStore.endCycle(cycle.id); haptic('heavy'); addToast(t('toast.cycle_ended'), 'info'); setConfirmEndCycle(false); }}
+          onCancel={() => setConfirmEndCycle(false)}
+        />
         <button onClick={() => { setSelectedCycle(null); setView('cycles'); }} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-xl font-bold">{cycle.name}</h1>
             <div className="text-text-muted text-xs mt-1">
-              Started {cycle.startDate} {cycle.active && `\u00b7 Week ${weeksElapsed + 1}`}
+              {t('cycles.started')} {cycle.startDate} {cycle.active && `\u00b7 ${t('cycles.week')} ${weeksElapsed + 1}`}
             </div>
           </div>
           {cycle.active && (
-            <button onClick={() => cycleStore.endCycle(cycle.id)} className="px-3 py-1.5 rounded-lg bg-danger/20 text-danger text-xs font-medium">
-              End Cycle
+            <button onClick={() => setConfirmEndCycle(true)} className="px-3 py-1.5 rounded-lg bg-danger/20 text-danger text-xs font-medium">
+              {t('cycles.end_cycle')}
             </button>
           )}
         </div>
 
         {maxWeeks > 0 && cycle.active && (
           <Card className="mb-4">
-            <div className="text-xs text-text-muted mb-2">Progress: Week {Math.min(weeksElapsed + 1, maxWeeks)} / {maxWeeks}</div>
+            <div className="text-xs text-text-muted mb-2">{t('cycles.progress')}: {t('cycles.week')} {Math.min(weeksElapsed + 1, maxWeeks)} / {maxWeeks}</div>
             <div className="w-full h-2 bg-surface-lighter rounded-full overflow-hidden">
-              <div className="h-full bg-accent rounded-full" style={{ width: `${Math.min(((weeksElapsed + 1) / maxWeeks) * 100, 100)}%` }} />
+              <div className="h-full bg-accent rounded-full animate-progress-fill" style={{ width: `${Math.min(((weeksElapsed + 1) / maxWeeks) * 100, 100)}%` }} />
             </div>
           </Card>
         )}
 
-        <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">Compounds</div>
+        <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{t('cycles.compounds')}</div>
         {cycle.compounds.length === 0 ? (
-          <Card className="py-6 text-center mb-4">
-            <div className="text-text-muted text-sm">No compounds added yet</div>
-          </Card>
+          <Card className="py-6 text-center mb-4"><div className="text-text-muted text-sm">{t('cycles.no_compounds')}</div></Card>
         ) : (
           <div className="space-y-2 mb-4">
             {cycle.compounds.map((c) => (
@@ -562,32 +553,28 @@ export function Profile() {
         )}
 
         <Card className="mb-4">
-          <div className="text-xs text-text-muted mb-2">Add Compound</div>
+          <div className="text-xs text-text-muted mb-2">{t('cycles.add_compound')}</div>
           <div className="space-y-2">
-            <input placeholder="Compound name" className="!py-2 !text-sm" value={compoundForm.name} onChange={(e) => setCompoundForm({ ...compoundForm, name: e.target.value })} />
+            <input placeholder={t('cycles.compound_name')} className="!py-2 !text-sm" value={compoundForm.name} onChange={(e) => setCompoundForm({ ...compoundForm, name: e.target.value })} />
             <div className="grid grid-cols-2 gap-2">
-              <input placeholder="Dosage" className="!py-2 !text-sm" value={compoundForm.dosage} onChange={(e) => setCompoundForm({ ...compoundForm, dosage: e.target.value })} />
-              <input type="number" inputMode="numeric" placeholder="Weeks" className="!py-2 !text-sm" value={compoundForm.durationWeeks} onChange={(e) => setCompoundForm({ ...compoundForm, durationWeeks: e.target.value })} />
+              <input placeholder={t('cycles.dosage')} className="!py-2 !text-sm" value={compoundForm.dosage} onChange={(e) => setCompoundForm({ ...compoundForm, dosage: e.target.value })} />
+              <input type="number" inputMode="numeric" placeholder={t('cycles.weeks')} className="!py-2 !text-sm" value={compoundForm.durationWeeks} onChange={(e) => setCompoundForm({ ...compoundForm, durationWeeks: e.target.value })} />
             </div>
             <select value={compoundForm.frequency} onChange={(e) => setCompoundForm({ ...compoundForm, frequency: e.target.value as CycleFrequency })} className="!py-2 !text-sm">
-              {(Object.keys(FREQ_LABELS) as CycleFrequency[]).map((f) => (
-                <option key={f} value={f}>{FREQ_LABELS[f]}</option>
-              ))}
+              {(Object.keys(FREQ_LABELS) as CycleFrequency[]).map((f) => <option key={f} value={f}>{FREQ_LABELS[f]}</option>)}
             </select>
           </div>
           <Button className="mt-3" fullWidth disabled={!compoundForm.name || !compoundForm.dosage || !compoundForm.durationWeeks} onClick={() => {
             cycleStore.addCompound(cycle.id, { name: compoundForm.name, dosage: compoundForm.dosage, frequency: compoundForm.frequency, durationWeeks: Number(compoundForm.durationWeeks) });
-            setCompoundForm({ name: '', dosage: '', frequency: 'weekly', durationWeeks: '' });
+            haptic('light'); setCompoundForm({ name: '', dosage: '', frequency: 'weekly', durationWeeks: '' });
           }}>
-            Add Compound
+            {t('cycles.add_compound')}
           </Button>
         </Card>
 
-        <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">PCT</div>
+        <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{t('cycles.pct')}</div>
         {pctEntries.length === 0 ? (
-          <Card className="py-4 text-center">
-            <div className="text-text-muted text-xs">No PCT entries. Add after cycle ends.</div>
-          </Card>
+          <Card className="py-4 text-center"><div className="text-text-muted text-xs">{t('cycles.no_pct')}</div></Card>
         ) : (
           <div className="space-y-2">
             {pctEntries.map((p) => (
@@ -609,28 +596,23 @@ export function Profile() {
     const active = cycleStore.getActiveCycle();
     const history = cycleStore.getCycleHistory();
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold">Cycle Tracker</h1>
-          <button onClick={() => setView('addCycle')} className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center">
-            <PlusIcon size={20} color="#000" />
-          </button>
+          <h1 className="text-xl font-bold">{t('cycles.title')}</h1>
+          <button onClick={() => setView('addCycle')} className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center"><PlusIcon size={20} color="#000" /></button>
         </div>
-
         {active ? (
           <>
-            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">Active Cycle</div>
+            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{t('cycles.active_cycle')}</div>
             <Card className="mb-4 border-accent/30" onClick={() => { setSelectedCycle(active); setView('cycleDetail'); }}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
-                  <SyringeIcon size={18} color="#00E676" />
-                </div>
+                <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center"><SyringeIcon size={18} color="#00E676" /></div>
                 <div className="flex-1">
                   <div className="text-sm font-semibold">{active.name}</div>
-                  <div className="text-text-muted text-xs">{active.compounds.length} compounds &middot; Started {active.startDate}</div>
+                  <div className="text-text-muted text-xs">{active.compounds.length} {t('cycles.compounds').toLowerCase()} &middot; {t('cycles.started')} {active.startDate}</div>
                 </div>
                 <ChevronRightIcon size={16} color="#616161" />
               </div>
@@ -639,14 +621,13 @@ export function Profile() {
         ) : (
           <Card className="mb-4 py-8 text-center">
             <SyringeIcon size={32} color="#616161" className="mx-auto mb-3" />
-            <div className="text-text-muted text-sm">No active cycle</div>
-            <div className="text-text-muted text-xs mt-1">Tap + to start one</div>
+            <div className="text-text-muted text-sm">{t('cycles.no_active')}</div>
+            <div className="text-text-muted text-xs mt-1">{t('cycles.no_active_desc')}</div>
           </Card>
         )}
-
         {history.length > 0 && (
           <>
-            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">History</div>
+            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{t('cycles.history')}</div>
             <div className="space-y-2">
               {history.map((c) => (
                 <Card key={c.id} onClick={() => { setSelectedCycle(c); setView('cycleDetail'); }} className="flex items-center justify-between">
@@ -666,23 +647,19 @@ export function Profile() {
 
   if (view === 'about') {
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
         <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
-          <ChevronLeftIcon size={16} /> Back
+          <ChevronLeftIcon size={16} /> {t('common.back')}
         </button>
-        <h1 className="text-xl font-bold mb-4">About FitAI</h1>
+        <h1 className="text-xl font-bold mb-4">{t('profile.about_title')}</h1>
         <Card className="mb-4">
           <div className="text-center mb-4">
-            <div className="text-2xl font-bold text-accent">FitAI</div>
-            <div className="text-text-muted text-xs mt-1">v3.0.0</div>
+            <div className="text-2xl font-bold text-accent">{t('onboarding.welcome_title')}</div>
+            <div className="text-text-muted text-xs mt-1">{t('profile.about_version')}</div>
           </div>
-          <div className="text-text-secondary text-sm leading-relaxed">
-            AI-powered fitness companion for Telegram. Track nutrition, workouts, progress, supplements, and more -- all in one place. Now with real AI integration via OpenAI and Google Gemini.
-          </div>
+          <div className="text-text-secondary text-sm leading-relaxed">{t('profile.about_desc')}</div>
         </Card>
-        <Card>
-          <div className="text-text-muted text-xs">Built with React, TypeScript, and Zustand. AI features powered by OpenAI GPT-4o and Google Gemini.</div>
-        </Card>
+        <Card><div className="text-text-muted text-xs">{t('profile.about_tech')}</div></Card>
       </div>
     );
   }
@@ -694,94 +671,104 @@ export function Profile() {
 
   return (
     <div className="px-5 pt-6 pb-24 animate-fade-in">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold">Profile</h1>
-        <p className="text-text-muted text-sm mt-1">Your settings</p>
-      </div>
-
-      <Card className="mb-4 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-surface-lighter flex items-center justify-center">
-          <ProfileIcon size={28} color="#9E9E9E" />
-        </div>
-        <div>
-          <div className="text-sm font-semibold">{profile.gender === 'male' ? 'Male' : 'Female'}, {profile.age}y</div>
-          <div className="text-text-muted text-xs">{profile.height}cm / {profile.weight}kg</div>
-          <div className="text-accent text-xs mt-0.5">{goalLabels[profile.goal]}</div>
-        </div>
-      </Card>
-
-      <Card className="mb-4">
-        <div className="text-text-muted text-xs mb-3">Daily Targets</div>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-text-secondary">Calories</span><span className="font-medium">{profile.targetCalories} kcal</span></div>
-          <div className="flex justify-between"><span className="text-text-secondary">Protein</span><span className="font-medium">{profile.macros.protein}g</span></div>
-          <div className="flex justify-between"><span className="text-text-secondary">Fat</span><span className="font-medium">{profile.macros.fat}g</span></div>
-          <div className="flex justify-between"><span className="text-text-secondary">Carbs</span><span className="font-medium">{profile.macros.carbs}g</span></div>
-          <div className="flex justify-between"><span className="text-text-secondary">TDEE</span><span className="font-medium">{profile.tdee} kcal</span></div>
-        </div>
-      </Card>
-
-      {/* Quick status cards */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <Card onClick={() => setView('supplements')} className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-yellow-400/10 flex items-center justify-center flex-shrink-0">
-            <PillIcon size={18} color="#FFD740" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold">Supplements</div>
-            <div className="text-text-muted text-[10px]">{takenCount}/{todayChecklist.length} taken</div>
-          </div>
-        </Card>
-        <Card onClick={() => setView('cycles')} className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-red-400/10 flex items-center justify-center flex-shrink-0">
-            <SyringeIcon size={18} color="#FF6B6B" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold">Cycles</div>
-            <div className="text-text-muted text-[10px]">{activeCycle ? 'Active' : 'None'}</div>
-          </div>
-        </Card>
-      </div>
-
-      <Card className="mb-4">
-        {[
-          { label: 'AI Settings', icon: <KeyIcon size={16} color="#00E676" />, action: () => setView('aiSettings') },
-          { label: 'Lab Results', icon: <BeakerIcon size={16} color="#60A5FA" />, action: () => setView('labResults') },
-          { label: 'Edit Profile', icon: <EditIcon size={16} color="#9E9E9E" />, action: () => setView('editProfile') },
-          { label: 'Supplements & Vitamins', icon: <PillIcon size={16} color="#9E9E9E" />, action: () => setView('supplements') },
-          { label: 'Cycle Tracker', icon: <SyringeIcon size={16} color="#9E9E9E" />, action: () => setView('cycles') },
-          { label: 'Export Data', icon: <DownloadIcon size={16} color="#9E9E9E" />, action: () => {} },
-          { label: 'About', icon: <InfoIcon size={16} color="#9E9E9E" />, action: () => setView('about') },
-        ].map((item) => (
-          <button key={item.label} onClick={item.action} className="flex items-center justify-between w-full py-3 border-b border-border last:border-0">
-            <div className="flex items-center gap-3">
-              {item.icon}
-              <span className="text-sm">{item.label}</span>
-            </div>
-            <ChevronRightIcon size={16} color="#616161" />
-          </button>
-        ))}
-      </Card>
-
-      {/* AI Status indicator */}
-      <Card className="mb-4 flex items-center gap-3">
-        <SparkleIcon size={16} color={aiStore.isConfigured() ? '#00E676' : '#616161'} />
-        <div className="flex-1">
-          <div className="text-xs font-medium">AI: {aiStore.provider === 'openai' ? 'OpenAI' : 'Gemini'}</div>
-          <div className="text-text-muted text-[10px]">{aiStore.isConfigured() ? 'Configured' : 'Not configured'}</div>
-        </div>
-        <button onClick={() => setView('aiSettings')} className="text-accent text-xs font-medium">Setup</button>
-      </Card>
-
-      <button
-        onClick={() => {
-          localStorage.clear();
-          setOnboarded(false);
+      <ConfirmDialog
+        open={confirmReset}
+        title={t('profile.reset_title')}
+        message={t('profile.reset_msg')}
+        danger confirmLabel={t('common.reset')}
+        onConfirm={() => {
+          localStorage.clear(); setOnboarded(false);
+          addToast(t('toast.data_reset'), 'info');
           window.location.reload();
         }}
-        className="w-full text-center text-danger text-sm py-3"
-      >
-        Reset All Data
+        onCancel={() => setConfirmReset(false)}
+      />
+
+      <div className="mb-6">
+        <h1 className="text-xl font-bold">{t('profile.title')}</h1>
+        <p className="text-text-muted text-sm mt-1">{t('profile.subtitle')}</p>
+      </div>
+
+      <div className="animate-stagger-in stagger-1">
+        <Card className="mb-4 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-full bg-surface-lighter flex items-center justify-center">
+            <ProfileIcon size={28} color="#9E9E9E" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold">{profile.gender === 'male' ? t('onboarding.male') : t('onboarding.female')}, {profile.age}{t('onboarding.age').charAt(0).toLowerCase()}</div>
+            <div className="text-text-muted text-xs">{profile.height}cm / {profile.weight}kg</div>
+            <div className="text-accent text-xs mt-0.5">{goalLabels[profile.goal]}</div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="animate-stagger-in stagger-2">
+        <Card className="mb-4">
+          <div className="text-text-muted text-xs mb-3">{t('profile.daily_targets')}</div>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-text-secondary">{t('profile.calories')}</span><span className="font-medium">{profile.targetCalories} kcal</span></div>
+            <div className="flex justify-between"><span className="text-text-secondary">{t('profile.protein')}</span><span className="font-medium">{profile.macros.protein}g</span></div>
+            <div className="flex justify-between"><span className="text-text-secondary">{t('profile.fat')}</span><span className="font-medium">{profile.macros.fat}g</span></div>
+            <div className="flex justify-between"><span className="text-text-secondary">{t('profile.carbs')}</span><span className="font-medium">{profile.macros.carbs}g</span></div>
+            <div className="flex justify-between"><span className="text-text-secondary">{t('profile.tdee')}</span><span className="font-medium">{profile.tdee} kcal</span></div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="animate-stagger-in stagger-3">
+          <Card onClick={() => setView('supplements')} className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-yellow-400/10 flex items-center justify-center flex-shrink-0"><PillIcon size={18} color="#FFD740" /></div>
+            <div>
+              <div className="text-xs font-semibold">{t('supplements.title')}</div>
+              <div className="text-text-muted text-[10px]">{takenCount}/{todayChecklist.length} {t('supplements.taken_today')}</div>
+            </div>
+          </Card>
+        </div>
+        <div className="animate-stagger-in stagger-4">
+          <Card onClick={() => setView('cycles')} className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-red-400/10 flex items-center justify-center flex-shrink-0"><SyringeIcon size={18} color="#FF6B6B" /></div>
+            <div>
+              <div className="text-xs font-semibold">{t('cycles.title')}</div>
+              <div className="text-text-muted text-[10px]">{activeCycle ? t('cycles.active') : t('common.noData')}</div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <div className="animate-stagger-in stagger-5">
+        <Card className="mb-4">
+          {[
+            { label: t('profile.ai_settings'), icon: <KeyIcon size={16} color="#00E676" />, action: () => setView('aiSettings') },
+            { label: t('labs.title'), icon: <BeakerIcon size={16} color="#60A5FA" />, action: () => setView('labResults') },
+            { label: t('profile.edit_profile'), icon: <EditIcon size={16} color="#9E9E9E" />, action: () => setView('editProfile') },
+            { label: t('profile.supplements_vitamins'), icon: <PillIcon size={16} color="#9E9E9E" />, action: () => setView('supplements') },
+            { label: t('profile.cycle_tracker'), icon: <SyringeIcon size={16} color="#9E9E9E" />, action: () => setView('cycles') },
+            { label: t('profile.language'), icon: <GlobeIcon size={16} color="#9E9E9E" />, action: () => setView('language') },
+            { label: t('profile.export_data'), icon: <DownloadIcon size={16} color="#9E9E9E" />, action: () => {} },
+            { label: t('profile.about'), icon: <InfoIcon size={16} color="#9E9E9E" />, action: () => setView('about') },
+          ].map((item) => (
+            <button key={item.label} onClick={item.action} className="flex items-center justify-between w-full py-3 border-b border-border last:border-0">
+              <div className="flex items-center gap-3">{item.icon}<span className="text-sm">{item.label}</span></div>
+              <ChevronRightIcon size={16} color="#616161" />
+            </button>
+          ))}
+        </Card>
+      </div>
+
+      <div className="animate-stagger-in stagger-6">
+        <Card className="mb-4 flex items-center gap-3">
+          <SparkleIcon size={16} color={aiStore.isConfigured() ? '#00E676' : '#616161'} />
+          <div className="flex-1">
+            <div className="text-xs font-medium">AI: {aiStore.provider === 'openai' ? 'OpenAI' : 'Gemini'}</div>
+            <div className="text-text-muted text-[10px]">{aiStore.isConfigured() ? t('ai.configured') : t('ai.not_configured')}</div>
+          </div>
+          <button onClick={() => setView('aiSettings')} className="text-accent text-xs font-medium">{t('ai.setup')}</button>
+        </Card>
+      </div>
+
+      <button onClick={() => setConfirmReset(true)} className="w-full text-center text-danger text-sm py-3">
+        {t('profile.reset_all')}
       </button>
     </div>
   );

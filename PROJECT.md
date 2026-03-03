@@ -5,7 +5,7 @@ FitAI is a comprehensive AI-powered fitness companion built as a Telegram Mini A
 
 **GitHub:** `PrivetAI/FitAI-Telegram`
 **Type:** Telegram Mini App (TWA)
-**Status:** In development (iteration 2 complete)
+**Status:** In development (iteration 6 complete)
 
 ---
 
@@ -254,6 +254,72 @@ npm run preview    # Preview production build
 3. Set up Telegram Bot via @BotFather
 4. Configure Mini App URL: `BotFather → /newapp → set URL to deployed app`
 5. Users access via bot menu button or direct link
+
+---
+
+## Iteration 6: Polish, Animations & i18n
+
+### i18n System (English + Russian)
+- Custom lightweight i18n system in `src/i18n/` — no external dependencies
+- `useTranslation()` hook returns `t(key)` function for dot-notation keys (e.g. `t('nav.dashboard')`)
+- Language store in `src/stores/langStore.ts` with Zustand persist
+- Auto-detects language from Telegram SDK (`WebApp.initDataUnsafe.user?.language_code`)
+- Falls back to English if not Russian
+- Language switcher in Profile > Language settings
+- **Every visible string** is translated across all pages, components, and states
+- Translation files: `src/i18n/locales/en.ts` and `src/i18n/locales/ru.ts`
+- Keys organized by feature: common, nav, onboarding, dashboard, nutrition, training, progress, profile, supplements, cycles, ai, labs, toast
+
+### Animations & Micro-interactions
+- Page transitions: `animate-fade-in`, `animate-slide-left`, `animate-slide-right`
+- Card entrance: stagger effect with `animate-stagger-in` + `stagger-1` through `stagger-8` delay classes
+- Button press: `active:scale-[0.97]` / `active:scale-95` on all interactive elements
+- Progress bars: `animate-progress-fill` with smooth CSS transitions
+- Number counting: `animate-count-up` on stats (calories, weight, macros)
+- Tab switch: `scale-105` on active tab with transition
+- Onboarding slides: `animate-slide-left` for forward navigation
+- Scale-in: `animate-scale-in` for dialogs and welcome icon
+- Input focus: green glow via `box-shadow` on focus
+- Haptic feedback via Telegram SDK on save, delete, complete workout, tab switch
+
+### Toast/Notification System
+- `src/components/Toast.tsx` + `src/stores/toastStore.ts`
+- Success (green), Error (red), Info (blue) variants
+- Auto-dismiss after 3 seconds
+- Slide in from top with `animate-toast-in`
+- Used across all features: save, delete, complete workout, end cycle, etc.
+
+### Confirm Dialog Component
+- `src/components/ConfirmDialog.tsx`
+- Reusable: title, message, confirm/cancel buttons, danger variant
+- Backdrop overlay with blur
+- Used for: delete food entries, end workouts, cancel workouts, end cycles, delete supplements, reset all data
+
+### Skeleton Loading
+- `src/components/Skeleton.tsx` — `Skeleton` and `SkeletonCard` components
+- AI chat uses animated typing dots instead of spinner
+
+### Empty States
+- Custom SVG illustrations: `EmptyPlateIcon`, `EmptyWorkoutIcon`, `EmptyChartIcon`
+- All empty states use SVG icons (no emoji)
+
+### New Files Added
+```
+src/i18n/index.ts
+src/i18n/locales/en.ts
+src/i18n/locales/ru.ts
+src/stores/langStore.ts
+src/stores/toastStore.ts
+src/components/Toast.tsx
+src/components/ConfirmDialog.tsx
+src/components/Skeleton.tsx
+```
+
+### New Icons
+- `GlobeIcon` — language settings
+- `EmptyPlateIcon` — nutrition empty state
+- `EmptyWorkoutIcon` — training empty state
+- `EmptyChartIcon` — progress empty state
 
 ---
 

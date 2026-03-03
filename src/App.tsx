@@ -2,6 +2,7 @@ import React from 'react';
 import { useAppStore } from './stores/appStore';
 import { useTelegram } from './hooks/useTelegram';
 import { BottomNav } from './components/BottomNav';
+import { ToastContainer } from './components/Toast';
 import { Onboarding } from './pages/onboarding/Onboarding';
 import { Dashboard } from './pages/Dashboard';
 import { Nutrition } from './pages/Nutrition';
@@ -22,14 +23,22 @@ export default function App() {
   const { onboarded, activeTab } = useAppStore();
 
   if (!onboarded) {
-    return <Onboarding />;
+    return (
+      <>
+        <ToastContainer />
+        <Onboarding />
+      </>
+    );
   }
 
   const Page = pages[activeTab] || Dashboard;
 
   return (
     <div className="min-h-screen bg-bg">
-      <Page />
+      <ToastContainer />
+      <div className="tab-content">
+        <Page />
+      </div>
       <BottomNav />
     </div>
   );

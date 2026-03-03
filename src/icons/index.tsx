@@ -366,3 +366,49 @@ export function SaveIcon({ size = defaults.size, color = defaults.color, classNa
     </svg>
   );
 }
+
+export function GlobeIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+    </svg>
+  );
+}
+
+export function EmptyPlateIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="24" cy="24" r="18" />
+      <circle cx="24" cy="24" r="12" />
+      <circle cx="24" cy="24" r="3" />
+      <line x1="16" y1="8" x2="16" y2="14" />
+      <line x1="24" y1="6" x2="24" y2="12" />
+      <line x1="32" y1="8" x2="32" y2="14" />
+    </svg>
+  );
+}
+
+export function EmptyWorkoutIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="4" y="18" width="8" height="12" rx="2" />
+      <rect x="36" y="18" width="8" height="12" rx="2" />
+      <rect x="12" y="14" width="6" height="20" rx="2" />
+      <rect x="30" y="14" width="6" height="20" rx="2" />
+      <line x1="18" y1="24" x2="30" y2="24" />
+    </svg>
+  );
+}
+
+export function EmptyChartIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="6 38 18 26 26 32 42 14" />
+      <polyline points="36 14 42 14 42 20" />
+      <line x1="6" y1="42" x2="42" y2="42" />
+      <line x1="6" y1="10" x2="6" y2="42" />
+    </svg>
+  );
+}

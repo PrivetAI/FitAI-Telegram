@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card } from './Card';
-import { SendIcon, LoaderIcon, XIcon, AlertIcon } from '../icons';
+import { SendIcon, XIcon, AlertIcon } from '../icons';
+import { useTranslation } from '../i18n';
 import type { ChatMessage } from '../services/ai/types';
 import { isConfigured } from '../services/ai';
 
@@ -11,7 +12,8 @@ interface AIChatProps {
   placeholder?: string;
 }
 
-export function AIChat({ title, onSend, onClose, placeholder = 'Ask a question...' }: AIChatProps) {
+export function AIChat({ title, onSend, onClose, placeholder }: AIChatProps) {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,8 +33,8 @@ export function AIChat({ title, onSend, onClose, placeholder = 'Ask a question..
         </div>
         <Card className="py-10 text-center">
           <AlertIcon size={32} color="#FFD740" className="mx-auto mb-3" />
-          <div className="text-sm font-medium mb-1">API Key Required</div>
-          <div className="text-text-muted text-xs">Go to Profile &gt; AI Settings to configure your API key.</div>
+          <div className="text-sm font-medium mb-1">{t('ai.no_key')}</div>
+          <div className="text-text-muted text-xs">{t('ai.setup_key')}</div>
         </Card>
       </div>
     );
@@ -45,7 +47,6 @@ export function AIChat({ title, onSend, onClose, placeholder = 'Ask a question..
     setError('');
 
     const newMessages: ChatMessage[] = [...messages, { role: 'user', content: text }];
-    // Keep last 10 messages
     const trimmed = newMessages.slice(-10);
     setMessages(trimmed);
     setLoading(true);
@@ -54,7 +55,7 @@ export function AIChat({ title, onSend, onClose, placeholder = 'Ask a question..
       const response = await onSend(trimmed);
       setMessages(prev => [...prev, { role: 'assistant' as const, content: response }].slice(-10));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get response');
+      setError(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setLoading(false);
     }
@@ -70,12 +71,12 @@ export function AIChat({ title, onSend, onClose, placeholder = 'Ask a question..
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 space-y-3">
         {messages.length === 0 && (
           <div className="text-center py-10">
-            <div className="text-text-muted text-sm">Ask me anything</div>
-            <div className="text-text-muted text-xs mt-1">I have context about your profile and progress</div>
+            <div className="text-text-muted text-sm">{t('ai.ask_anything')}</div>
+            <div className="text-text-muted text-xs mt-1">{t('ai.ask_context')}</div>
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-stagger-in`}>
             <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
               msg.role === 'user'
                 ? 'bg-accent text-black rounded-br-md'
@@ -89,8 +90,12 @@ export function AIChat({ title, onSend, onClose, placeholder = 'Ask a question..
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-surface-lighter rounded-2xl rounded-bl-md px-4 py-3">
-              <LoaderIcon size={18} color="#9E9E9E" />
+            <div className="bg-surface-lighter rounded-2xl rounded-bl-md px-4 py-3 animate-pulse">
+              <div className="flex gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-text-muted animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 rounded-full bg-text-muted animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 rounded-full bg-text-muted animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           </div>
         )}
@@ -107,7 +112,7 @@ export function AIChat({ title, onSend, onClose, placeholder = 'Ask a question..
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder={placeholder}
+            placeholder={placeholder || t('ai.ask_anything')}
             className="flex-1 !py-3"
             disabled={loading}
           />

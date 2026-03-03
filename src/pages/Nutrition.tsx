@@ -2,15 +2,24 @@ import { useState, useRef } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { AIChat } from '../components/AIChat';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAppStore } from '../stores/appStore';
 import { useNutritionStore } from '../stores/nutritionStore';
-import { SparkleIcon, PlusIcon, TrashIcon, EditIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, MessageIcon, LoaderIcon, AlertIcon, XIcon } from '../icons';
+import { useToastStore } from '../stores/toastStore';
+import { useTranslation } from '../i18n';
+import { useTelegram } from '../hooks/useTelegram';
+import { SparkleIcon, PlusIcon, TrashIcon, EditIcon, ChevronLeftIcon, ChevronRightIcon, CameraIcon, MessageIcon, LoaderIcon, AlertIcon, XIcon, EmptyPlateIcon } from '../icons';
 import { analyzeFoodPhoto, nutritionChat, isConfigured } from '../services/ai';
 import type { ChatMessage } from '../services/ai';
 import type { FoodEntry, MealType } from '../types';
 
-const MEAL_LABELS: Record<MealType, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' };
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+const MEAL_KEYS: Record<MealType, string> = {
+  breakfast: 'nutrition.meal_breakfast',
+  lunch: 'nutrition.meal_lunch',
+  dinner: 'nutrition.meal_dinner',
+  snack: 'nutrition.meal_snack',
+};
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function formatDate(d: string) {
@@ -32,16 +41,17 @@ function MacroBar({ label, current, target, color }: { label: string; current: n
         <span className="text-text-muted">{current} / {target}g</span>
       </div>
       <div className="w-full h-1.5 bg-surface-lighter rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
+        <div className="h-full rounded-full animate-progress-fill" style={{ width: `${pct}%`, backgroundColor: color, transition: 'width 0.8s ease-out' }} />
       </div>
     </div>
   );
 }
 
-function FoodForm({ initial, onSave, onCancel }: {
+function FoodForm({ initial, onSave, onCancel, t }: {
   initial?: Partial<FoodEntry>;
   onSave: (data: Omit<FoodEntry, 'id' | 'createdAt'>) => void;
   onCancel: () => void;
+  t: (key: string) => string;
 }) {
   const [name, setName] = useState(initial?.name || '');
   const [calories, setCalories] = useState(initial?.calories?.toString() || '');
@@ -56,15 +66,15 @@ function FoodForm({ initial, onSave, onCancel }: {
   return (
     <div className="animate-fade-in">
       <div className="space-y-3 mb-4">
-        <input placeholder="Food name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input placeholder={t('nutrition.food_name')} value={name} onChange={(e) => setName(e.target.value)} />
         <div className="grid grid-cols-2 gap-3">
-          <input placeholder="Calories" type="number" inputMode="numeric" value={calories} onChange={(e) => setCalories(e.target.value)} />
-          <input placeholder="Portion size" value={portion} onChange={(e) => setPortion(e.target.value)} />
+          <input placeholder={t('nutrition.calories')} type="number" inputMode="numeric" value={calories} onChange={(e) => setCalories(e.target.value)} />
+          <input placeholder={t('nutrition.portion_size')} value={portion} onChange={(e) => setPortion(e.target.value)} />
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <input placeholder="Protein (g)" type="number" inputMode="decimal" value={protein} onChange={(e) => setProtein(e.target.value)} />
-          <input placeholder="Fat (g)" type="number" inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} />
-          <input placeholder="Carbs (g)" type="number" inputMode="decimal" value={carbs} onChange={(e) => setCarbs(e.target.value)} />
+          <input placeholder={t('nutrition.protein_g')} type="number" inputMode="decimal" value={protein} onChange={(e) => setProtein(e.target.value)} />
+          <input placeholder={t('nutrition.fat_g')} type="number" inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} />
+          <input placeholder={t('nutrition.carbs_g')} type="number" inputMode="decimal" value={carbs} onChange={(e) => setCarbs(e.target.value)} />
         </div>
         <div className="grid grid-cols-4 gap-2">
           {MEAL_ORDER.map((m) => (
@@ -75,13 +85,13 @@ function FoodForm({ initial, onSave, onCancel }: {
                 meal === m ? 'bg-accent text-black' : 'bg-surface-lighter text-text-secondary'
               }`}
             >
-              {MEAL_LABELS[m]}
+              {t(MEAL_KEYS[m])}
             </button>
           ))}
         </div>
       </div>
       <div className="flex gap-3">
-        <Button variant="secondary" fullWidth onClick={onCancel}>Cancel</Button>
+        <Button variant="secondary" fullWidth onClick={onCancel}>{t('common.cancel')}</Button>
         <Button
           fullWidth
           disabled={!valid}
@@ -91,12 +101,12 @@ function FoodForm({ initial, onSave, onCancel }: {
             protein: Number(protein) || 0,
             fat: Number(fat) || 0,
             carbs: Number(carbs) || 0,
-            portionSize: portion || '1 serving',
+            portionSize: portion || t('nutrition.serving'),
             mealType: meal,
             date: initial?.date || today(),
           })}
         >
-          {initial?.id ? 'Update' : 'Add Food'}
+          {initial?.id ? t('nutrition.update') : t('nutrition.add_food')}
         </Button>
       </div>
     </div>
@@ -104,8 +114,11 @@ function FoodForm({ initial, onSave, onCancel }: {
 }
 
 export function Nutrition() {
+  const { t } = useTranslation();
+  const { haptic } = useTelegram();
   const profile = useAppStore((s) => s.profile);
   const { entries, addEntry, updateEntry, deleteEntry } = useNutritionStore();
+  const addToast = useToastStore((s) => s.addToast);
   const [viewDate, setViewDate] = useState(today());
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
@@ -114,6 +127,7 @@ export function Nutrition() {
   const [scanResult, setScanResult] = useState<Partial<FoodEntry> | null>(null);
   const [scanError, setScanError] = useState('');
   const [showChat, setShowChat] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!profile) return null;
@@ -127,71 +141,40 @@ export function Nutrition() {
   const grouped = MEAL_ORDER.map((m) => ({ type: m, items: dayEntries.filter((e) => e.mealType === m) })).filter((g) => g.items.length > 0);
   const isToday = viewDate === today();
 
-  // AI Chat view
   if (showChat) {
     const handleNutritionChat = async (messages: ChatMessage[]) => {
       return nutritionChat(messages, {
-        tdee: profile.tdee,
-        targetCalories: profile.targetCalories,
-        macros: profile.macros,
-        goal: profile.goal,
-        weight: profile.weight,
+        tdee: profile.tdee, targetCalories: profile.targetCalories, macros: profile.macros, goal: profile.goal, weight: profile.weight,
       }, totals);
     };
-    return <AIChat title="Nutrition Coach" onSend={handleNutritionChat} onClose={() => setShowChat(false)} placeholder="Ask about nutrition..." />;
+    return <AIChat title={t('nutrition.coach_title')} onSend={handleNutritionChat} onClose={() => setShowChat(false)} placeholder={t('nutrition.coach_placeholder')} />;
   }
 
-  // Scanner view
   if (showScanner) {
     const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
-      setScanning(true);
-      setScanError('');
-      setScanResult(null);
-
+      setScanning(true); setScanError(''); setScanResult(null);
       try {
         const reader = new FileReader();
         const base64 = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-          };
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
-
         const result = await analyzeFoodPhoto(base64, file.type || 'image/jpeg');
-        setScanResult({
-          name: result.name,
-          calories: result.calories,
-          protein: result.protein,
-          fat: result.fat,
-          carbs: result.carbs,
-          portionSize: result.portionSize,
-        });
+        setScanResult({ name: result.name, calories: result.calories, protein: result.protein, fat: result.fat, carbs: result.carbs, portionSize: result.portionSize });
       } catch (err) {
-        setScanError(err instanceof Error ? err.message : 'Failed to analyze photo');
-      } finally {
-        setScanning(false);
-      }
+        setScanError(err instanceof Error ? err.message : t('common.error'));
+      } finally { setScanning(false); }
     };
 
     if (scanResult) {
       return (
-        <div className="px-5 pt-6 pb-24 animate-fade-in">
-          <h1 className="text-xl font-bold mb-1">AI Analysis Result</h1>
-          <p className="text-text-muted text-xs mb-4">Review and edit before saving</p>
-          <FoodForm
-            initial={scanResult}
-            onSave={(data) => {
-              addEntry({ ...data, date: viewDate });
-              setScanResult(null);
-              setShowScanner(false);
-            }}
-            onCancel={() => { setScanResult(null); setShowScanner(false); }}
-          />
+        <div className="px-5 pt-6 pb-24 animate-slide-left">
+          <h1 className="text-xl font-bold mb-1">{t('nutrition.ai_result')}</h1>
+          <p className="text-text-muted text-xs mb-4">{t('nutrition.ai_result_desc')}</p>
+          <FoodForm t={t} initial={scanResult} onSave={(data) => { addEntry({ ...data, date: viewDate }); haptic('medium'); addToast(t('toast.food_added')); setScanResult(null); setShowScanner(false); }} onCancel={() => { setScanResult(null); setShowScanner(false); }} />
         </div>
       );
     }
@@ -199,44 +182,30 @@ export function Nutrition() {
     return (
       <div className="px-5 pt-6 pb-24 animate-fade-in">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold">AI Food Scanner</h1>
-          <button onClick={() => setShowScanner(false)} className="p-2 rounded-lg active:bg-surface-lighter">
-            <XIcon size={20} />
-          </button>
+          <h1 className="text-xl font-bold">{t('nutrition.ai_scan_title')}</h1>
+          <button onClick={() => setShowScanner(false)} className="p-2 rounded-lg active:bg-surface-lighter"><XIcon size={20} /></button>
         </div>
-
         {!isConfigured() ? (
           <Card className="py-10 text-center">
             <AlertIcon size={32} color="#FFD740" className="mx-auto mb-3" />
-            <div className="text-sm font-medium mb-1">API Key Required</div>
-            <div className="text-text-muted text-xs">Go to Profile &gt; AI Settings to configure your API key.</div>
+            <div className="text-sm font-medium mb-1">{t('ai.no_key')}</div>
+            <div className="text-text-muted text-xs">{t('ai.setup_key')}</div>
           </Card>
         ) : scanning ? (
           <Card className="py-16 text-center">
             <LoaderIcon size={32} color="#00E676" className="mx-auto mb-4" />
-            <div className="text-sm font-medium">Analyzing food...</div>
-            <div className="text-text-muted text-xs mt-1">This may take a few seconds</div>
+            <div className="text-sm font-medium">{t('nutrition.analyzing')}</div>
+            <div className="text-text-muted text-xs mt-1">{t('nutrition.analyzing_desc')}</div>
           </Card>
         ) : (
           <>
             <Card className="py-12 text-center" onClick={() => fileRef.current?.click()}>
               <CameraIcon size={40} color="#00E676" className="mx-auto mb-4" />
-              <div className="text-sm font-medium mb-1">Take a Photo</div>
-              <div className="text-text-muted text-xs">Tap to capture or select a food photo</div>
+              <div className="text-sm font-medium mb-1">{t('nutrition.take_photo')}</div>
+              <div className="text-text-muted text-xs">{t('nutrition.take_photo_desc')}</div>
             </Card>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFile}
-              className="hidden"
-            />
-            {scanError && (
-              <Card className="mt-4 bg-danger/10">
-                <div className="text-danger text-xs">{scanError}</div>
-              </Card>
-            )}
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+            {scanError && <Card className="mt-4 bg-danger/10"><div className="text-danger text-xs">{scanError}</div></Card>}
           </>
         )}
       </div>
@@ -245,18 +214,16 @@ export function Nutrition() {
 
   if (showForm || editingEntry) {
     return (
-      <div className="px-5 pt-6 pb-24 animate-fade-in">
-        <h1 className="text-xl font-bold mb-4">{editingEntry ? 'Edit Food' : 'Add Food'}</h1>
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
+        <h1 className="text-xl font-bold mb-4">{editingEntry ? t('nutrition.edit_food') : t('nutrition.add_food')}</h1>
         <FoodForm
+          t={t}
           initial={editingEntry || undefined}
           onSave={(data) => {
-            if (editingEntry) {
-              updateEntry(editingEntry.id, data);
-            } else {
-              addEntry({ ...data, date: viewDate });
-            }
-            setShowForm(false);
-            setEditingEntry(null);
+            if (editingEntry) { updateEntry(editingEntry.id, data); addToast(t('toast.food_updated')); }
+            else { addEntry({ ...data, date: viewDate }); addToast(t('toast.food_added')); }
+            haptic('medium');
+            setShowForm(false); setEditingEntry(null);
           }}
           onCancel={() => { setShowForm(false); setEditingEntry(null); }}
         />
@@ -266,10 +233,20 @@ export function Nutrition() {
 
   return (
     <div className="px-5 pt-6 pb-24 animate-fade-in">
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={t('nutrition.delete_food_title')}
+        message={t('nutrition.delete_food_msg')}
+        danger
+        confirmLabel={t('common.delete')}
+        onConfirm={() => { deleteEntry(deleteTarget!); haptic('medium'); addToast(t('toast.food_deleted'), 'info'); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold">Nutrition</h1>
-          <p className="text-text-muted text-sm mt-1">Track your meals</p>
+          <h1 className="text-xl font-bold">{t('nutrition.title')}</h1>
+          <p className="text-text-muted text-sm mt-1">{t('nutrition.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowChat(true)} className="w-10 h-10 rounded-xl bg-surface-lighter flex items-center justify-center active:scale-95 transition-transform">
@@ -281,65 +258,59 @@ export function Nutrition() {
         </div>
       </div>
 
-      {/* Date nav */}
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => setViewDate(shiftDate(viewDate, -1))} className="p-2 rounded-lg active:bg-surface-lighter">
           <ChevronLeftIcon size={18} />
         </button>
-        <span className="text-sm font-medium">{isToday ? 'Today' : formatDate(viewDate)}</span>
-        <button
-          onClick={() => { if (!isToday) setViewDate(shiftDate(viewDate, 1)); }}
-          className={`p-2 rounded-lg active:bg-surface-lighter ${isToday ? 'opacity-30' : ''}`}
-        >
+        <span className="text-sm font-medium">{isToday ? t('common.today') : formatDate(viewDate)}</span>
+        <button onClick={() => { if (!isToday) setViewDate(shiftDate(viewDate, 1)); }} className={`p-2 rounded-lg active:bg-surface-lighter ${isToday ? 'opacity-30' : ''}`}>
           <ChevronRightIcon size={18} />
         </button>
       </div>
 
-      {/* Daily summary */}
-      <Card className="mb-4">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="text-text-muted text-xs">Calories remaining</div>
-            <div className={`text-2xl font-bold ${remaining < 0 ? 'text-danger' : ''}`}>{remaining}</div>
+      <div className="animate-stagger-in stagger-1">
+        <Card className="mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-text-muted text-xs">{t('nutrition.calories_remaining')}</div>
+              <div className={`text-2xl font-bold animate-count-up ${remaining < 0 ? 'text-danger' : ''}`}>{remaining}</div>
+            </div>
+            <div className="text-right text-text-muted text-xs">
+              {totals.calories} {t('nutrition.eaten')}<br />
+              {profile.targetCalories} {t('nutrition.goal')}
+            </div>
           </div>
-          <div className="text-right text-text-muted text-xs">
-            {totals.calories} eaten<br />
-            {profile.targetCalories} goal
+          <div className="w-full h-2 bg-surface-lighter rounded-full overflow-hidden mb-4">
+            <div className={`h-full rounded-full animate-progress-fill ${remaining < 0 ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${Math.min((totals.calories / profile.targetCalories) * 100, 100)}%` }} />
           </div>
-        </div>
-        <div className="w-full h-2 bg-surface-lighter rounded-full overflow-hidden mb-4">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${remaining < 0 ? 'bg-danger' : 'bg-accent'}`}
-            style={{ width: `${Math.min((totals.calories / profile.targetCalories) * 100, 100)}%` }}
-          />
-        </div>
-        <div className="space-y-2">
-          <MacroBar label="Protein" current={totals.protein} target={profile.macros.protein} color="#00E676" />
-          <MacroBar label="Fat" current={totals.fat} target={profile.macros.fat} color="#FFD740" />
-          <MacroBar label="Carbs" current={totals.carbs} target={profile.macros.carbs} color="#60A5FA" />
-        </div>
-      </Card>
+          <div className="space-y-2">
+            <MacroBar label={t('onboarding.protein')} current={totals.protein} target={profile.macros.protein} color="#00E676" />
+            <MacroBar label={t('onboarding.fat')} current={totals.fat} target={profile.macros.fat} color="#FFD740" />
+            <MacroBar label={t('onboarding.carbs')} current={totals.carbs} target={profile.macros.carbs} color="#60A5FA" />
+          </div>
+        </Card>
+      </div>
 
-      {/* AI Scan button */}
-      <Card className="mb-4 flex items-center gap-4" onClick={() => setShowScanner(true)}>
-        <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0">
-          <CameraIcon size={22} color="#00E676" />
-        </div>
-        <div className="flex-1">
-          <div className="text-sm font-semibold flex items-center gap-2">
-            AI Food Scanner
-            <SparkleIcon size={14} color="#00E676" />
+      <div className="animate-stagger-in stagger-2">
+        <Card className="mb-4 flex items-center gap-4" onClick={() => setShowScanner(true)}>
+          <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0">
+            <CameraIcon size={22} color="#00E676" />
           </div>
-          <div className="text-text-muted text-xs">Take a photo to auto-analyze meals</div>
-        </div>
-        <ChevronRightIcon size={18} color="#616161" />
-      </Card>
+          <div className="flex-1">
+            <div className="text-sm font-semibold flex items-center gap-2">
+              {t('nutrition.ai_scan')}
+              <SparkleIcon size={14} color="#00E676" />
+            </div>
+            <div className="text-text-muted text-xs">{t('nutrition.ai_scan_desc')}</div>
+          </div>
+          <ChevronRightIcon size={18} color="#616161" />
+        </Card>
+      </div>
 
-      {/* Meal groups */}
       {grouped.length > 0 ? (
-        grouped.map(({ type, items }) => (
-          <div key={type} className="mb-4">
-            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{MEAL_LABELS[type]}</div>
+        grouped.map(({ type, items }, gi) => (
+          <div key={type} className={`mb-4 animate-stagger-in stagger-${Math.min(gi + 3, 8)}`}>
+            <div className="text-text-muted text-xs font-medium mb-2 uppercase tracking-wider">{t(MEAL_KEYS[type])}</div>
             <Card className="divide-y divide-border">
               {items.map((entry) => (
                 <div key={entry.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
@@ -349,12 +320,8 @@ export function Nutrition() {
                   </div>
                   <div className="flex items-center gap-2 ml-3">
                     <span className="text-sm font-semibold text-accent">{entry.calories}</span>
-                    <button onClick={() => setEditingEntry(entry)} className="p-1.5 rounded-lg active:bg-surface-lighter">
-                      <EditIcon size={14} color="#616161" />
-                    </button>
-                    <button onClick={() => deleteEntry(entry.id)} className="p-1.5 rounded-lg active:bg-surface-lighter">
-                      <TrashIcon size={14} color="#FF5252" />
-                    </button>
+                    <button onClick={() => setEditingEntry(entry)} className="p-1.5 rounded-lg active:bg-surface-lighter"><EditIcon size={14} color="#616161" /></button>
+                    <button onClick={() => setDeleteTarget(entry.id)} className="p-1.5 rounded-lg active:bg-surface-lighter"><TrashIcon size={14} color="#FF5252" /></button>
                   </div>
                 </div>
               ))}
@@ -362,26 +329,16 @@ export function Nutrition() {
           </div>
         ))
       ) : (
-        <Card className="flex items-center justify-center py-10">
-          <div className="text-center">
-            <NutritionIconEmpty />
-            <div className="text-text-muted text-sm mt-3">No meals logged</div>
-            <div className="text-text-muted text-xs mt-1">Tap + to add food</div>
-          </div>
-        </Card>
+        <div className="animate-stagger-in stagger-3">
+          <Card className="flex items-center justify-center py-10">
+            <div className="text-center">
+              <EmptyPlateIcon size={48} color="#616161" className="mx-auto" />
+              <div className="text-text-muted text-sm mt-3">{t('nutrition.no_meals')}</div>
+              <div className="text-text-muted text-xs mt-1">{t('nutrition.no_meals_desc')}</div>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
-  );
-}
-
-function NutritionIconEmpty() {
-  return (
-    <svg width={32} height={32} viewBox="0 0 24 24" fill="none" stroke="#616161" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto">
-      <path d="M18 8h1a4 4 0 010 8h-1" />
-      <path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z" />
-      <line x1="6" y1="1" x2="6" y2="4" />
-      <line x1="10" y1="1" x2="10" y2="4" />
-      <line x1="14" y1="1" x2="14" y2="4" />
-    </svg>
   );
 }
