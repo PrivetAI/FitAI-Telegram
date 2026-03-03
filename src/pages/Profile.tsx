@@ -14,10 +14,16 @@ import {
   ProfileIcon, ChevronRightIcon, ChevronLeftIcon, PillIcon, SyringeIcon,
   CheckIcon, PlusIcon, TrashIcon, EditIcon, DownloadIcon, InfoIcon,
   KeyIcon, SparkleIcon, LoaderIcon, AlertIcon, BeakerIcon, WandIcon, GlobeIcon,
+  CloudIcon, SyncIcon, LinkIcon,
 } from '../icons';
 import { calculateBMR, calculateTDEE, calculateTargetCalories, calculateMacros } from '../utils/tdee';
 import { testConnection, getSupplementRecommendations, analyzeLabResults } from '../services/ai';
 import type { SupplementRecommendation, LabValue, LabAnalysisResult } from '../services/ai';
+import { useSupabaseStore } from '../stores/supabaseStore';
+import { syncAll } from '../services/supabase/sync';
+import { useNutritionStore } from '../stores/nutritionStore';
+import { useTrainingStore } from '../stores/trainingStore';
+import { useProgressStore } from '../stores/progressStore';
 import type { Supplement, SupplementSchedule, SteroidCycle, CycleFrequency } from '../types';
 
 const LAB_MARKERS = [
@@ -56,16 +62,20 @@ const GEMINI_MODELS = [
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
 ];
 
-type View = 'main' | 'editProfile' | 'supplements' | 'addSupplement' | 'cycles' | 'addCycle' | 'cycleDetail' | 'about' | 'aiSettings' | 'aiSupplements' | 'labResults' | 'labAnalysis' | 'language';
+type View = 'main' | 'editProfile' | 'supplements' | 'addSupplement' | 'cycles' | 'addCycle' | 'cycleDetail' | 'about' | 'aiSettings' | 'aiSupplements' | 'labResults' | 'labAnalysis' | 'language' | 'cloudSync';
 
 export function Profile() {
   const { t } = useTranslation();
-  const { haptic } = useTelegram();
+  const { haptic, user } = useTelegram();
   const { profile, setProfile, setOnboarded } = useAppStore();
   const suppStore = useSupplementStore();
   const cycleStore = useCycleStore();
   const aiStore = useAIStore();
   const langStore = useLangStore();
+  const supaStore = useSupabaseStore();
+  const nutritionStore = useNutritionStore();
+  const trainingStore = useTrainingStore();
+  const progressStore = useProgressStore();
   const addToast = useToastStore((s) => s.addToast);
   const [view, setView] = useState<View>('main');
   const [editData, setEditData] = useState({ age: '', height: '', weight: '' });
@@ -115,6 +125,150 @@ export function Profile() {
     weekly: t('cycles.freq_weekly'),
     biweekly: t('cycles.freq_biweekly'),
   };
+
+  // === CLOUD SYNC ===
+  if (view === 'cloudSync') {
+    const statusColors: Record<string, string> = {
+      disconnected: '#616161', connecting: '#FFD740', connected: '#00E676', error: '#FF5252',
+    };
+    const statusLabels: Record<string, string> = {
+      disconnected: t('sync.status_disconnected'), connecting: t('sync.status_connecting'),
+      connected: t('sync.status_connected'), error: t('sync.status_error'),
+    };
+
+    const handleSync = async () => {
+      if (supaStore.connectionStatus !== 'connected') return;
+      supaStore.setSyncInProgress(true);
+      try {
+        const tgUser = user;
+        await syncAll({
+          getTelegramUser: () => tgUser ? { id: tgUser.id, username: tgUser.username } : undefined,
+          getLanguage: () => langStore.language,
+          getNutritionEntries: () => nutritionStore.entries,
+          getWorkoutLogs: () => trainingStore.workoutLogs,
+          getWeightEntries: () => progressStore.weightEntries,
+          getMeasurements: () => progressStore.measurements,
+          getSupplements: () => suppStore.supplements,
+          getSupplementLogs: () => suppStore.logs,
+          getCycles: () => cycleStore.cycles,
+          getPCTEntries: () => cycleStore.pctEntries,
+          getProfile: () => profile,
+          setNutritionEntries: (entries) => useNutritionStore.setState({ entries }),
+          setWorkoutLogs: (workoutLogs) => useTrainingStore.setState({ workoutLogs }),
+          setWeightEntries: (weightEntries) => useProgressStore.setState({ weightEntries }),
+          setMeasurements: (measurements) => useProgressStore.setState({ measurements }),
+          setSupplements: (supplements) => useSupplementStore.setState({ supplements }),
+          setSupplementLogs: (logs) => useSupplementStore.setState({ logs }),
+          setCycles: (cycles) => useCycleStore.setState({ cycles }),
+          setPCTEntries: (pctEntries) => useCycleStore.setState({ pctEntries }),
+          setProfile: (p) => setProfile(p),
+        });
+        supaStore.setLastSyncedAt(Date.now());
+        haptic('medium');
+        addToast(t('sync.sync_complete'));
+      } catch (err) {
+        console.error('[Sync]', err);
+        addToast(t('sync.sync_failed'), 'error');
+      } finally {
+        supaStore.setSyncInProgress(false);
+      }
+    };
+
+    const handleConnect = async () => {
+      const ok = await supaStore.connect();
+      if (ok) {
+        haptic('medium');
+        addToast(t('sync.connected'));
+      } else {
+        addToast(t('sync.connection_failed'), 'error');
+      }
+    };
+
+    return (
+      <div className="px-5 pt-6 pb-24 animate-slide-left">
+        <button onClick={() => setView('main')} className="flex items-center gap-1 text-text-muted text-sm mb-4">
+          <ChevronLeftIcon size={16} /> {t('common.back')}
+        </button>
+        <h1 className="text-xl font-bold mb-1">{t('sync.title')}</h1>
+        <p className="text-text-muted text-xs mb-4">{t('sync.subtitle')}</p>
+
+        <Card className="mb-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: statusColors[supaStore.connectionStatus] }} />
+            <span className="text-sm font-medium">{statusLabels[supaStore.connectionStatus]}</span>
+          </div>
+
+          <div className="space-y-3 mb-4">
+            <div>
+              <div className="text-text-muted text-xs mb-1">{t('sync.supabase_url')}</div>
+              <input
+                type="url"
+                placeholder="https://xxxxx.supabase.co"
+                value={supaStore.url}
+                onChange={(e) => supaStore.setUrl(e.target.value)}
+              />
+            </div>
+            <div>
+              <div className="text-text-muted text-xs mb-1">{t('sync.anon_key')}</div>
+              <input
+                type="password"
+                placeholder="eyJhbGci..."
+                value={supaStore.anonKey}
+                onChange={(e) => supaStore.setAnonKey(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="text-text-muted text-[10px] mb-4">{t('sync.config_notice')}</div>
+
+          {supaStore.connectionStatus === 'connected' ? (
+            <Button variant="secondary" fullWidth onClick={() => supaStore.disconnect()}>
+              {t('sync.disconnect')}
+            </Button>
+          ) : (
+            <Button fullWidth disabled={!supaStore.url || !supaStore.anonKey || supaStore.connectionStatus === 'connecting'} onClick={handleConnect}>
+              {supaStore.connectionStatus === 'connecting'
+                ? <span className="flex items-center gap-2"><LoaderIcon size={16} color="#000" /> {t('sync.status_connecting')}</span>
+                : <span className="flex items-center gap-2"><LinkIcon size={16} color="#000" /> {t('sync.connect')}</span>
+              }
+            </Button>
+          )}
+        </Card>
+
+        {supaStore.connectionStatus === 'connected' && (
+          <>
+            <Card className="mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium">{t('sync.auto_sync')}</span>
+                <button
+                  onClick={() => { supaStore.setAutoSync(!supaStore.autoSync); haptic('light'); }}
+                  className={`w-12 h-7 rounded-full transition-colors relative ${supaStore.autoSync ? 'bg-accent' : 'bg-surface-lighter'}`}
+                >
+                  <div className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-transform ${supaStore.autoSync ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {supaStore.lastSyncedAt && (
+                <div className="text-text-muted text-xs">
+                  {t('sync.last_synced')}: {new Date(supaStore.lastSyncedAt).toLocaleString()}
+                </div>
+              )}
+            </Card>
+
+            <Button fullWidth disabled={supaStore.syncInProgress} onClick={handleSync}>
+              {supaStore.syncInProgress
+                ? <span className="flex items-center gap-2"><LoaderIcon size={16} color="#000" /> {t('sync.syncing')}</span>
+                : <span className="flex items-center gap-2"><SyncIcon size={16} color="#000" /> {t('sync.sync_now')}</span>
+              }
+            </Button>
+          </>
+        )}
+
+        <Card className="mt-4 bg-surface-lighter">
+          <div className="text-text-muted text-[10px] text-center">{t('sync.setup_notice')}</div>
+        </Card>
+      </div>
+    );
+  }
 
   // === LANGUAGE ===
   if (view === 'language') {
@@ -740,6 +894,7 @@ export function Profile() {
         <Card className="mb-4">
           {[
             { label: t('profile.ai_settings'), icon: <KeyIcon size={16} color="#00E676" />, action: () => setView('aiSettings') },
+            { label: t('sync.title'), icon: <CloudIcon size={16} color="#60A5FA" />, action: () => setView('cloudSync') },
             { label: t('labs.title'), icon: <BeakerIcon size={16} color="#60A5FA" />, action: () => setView('labResults') },
             { label: t('profile.edit_profile'), icon: <EditIcon size={16} color="#9E9E9E" />, action: () => setView('editProfile') },
             { label: t('profile.supplements_vitamins'), icon: <PillIcon size={16} color="#9E9E9E" />, action: () => setView('supplements') },
@@ -764,6 +919,19 @@ export function Profile() {
             <div className="text-text-muted text-[10px]">{aiStore.isConfigured() ? t('ai.configured') : t('ai.not_configured')}</div>
           </div>
           <button onClick={() => setView('aiSettings')} className="text-accent text-xs font-medium">{t('ai.setup')}</button>
+        </Card>
+      </div>
+
+      <div className="animate-stagger-in stagger-7">
+        <Card className="mb-4 flex items-center gap-3">
+          <CloudIcon size={16} color={supaStore.connectionStatus === 'connected' ? '#00E676' : '#616161'} />
+          <div className="flex-1">
+            <div className="text-xs font-medium">{t('sync.title')}</div>
+            <div className="text-text-muted text-[10px]">
+              {supaStore.connectionStatus === 'connected' ? t('sync.status_connected') : t('sync.status_disconnected')}
+            </div>
+          </div>
+          <button onClick={() => setView('cloudSync')} className="text-accent text-xs font-medium">{t('ai.setup')}</button>
         </Card>
       </div>
 

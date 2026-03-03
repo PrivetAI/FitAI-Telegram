@@ -5,7 +5,7 @@ FitAI is a comprehensive AI-powered fitness companion built as a Telegram Mini A
 
 **GitHub:** `PrivetAI/FitAI-Telegram`
 **Type:** Telegram Mini App (TWA)
-**Status:** In development (iteration 6 complete)
+**Status:** In development (iteration 7 complete)
 
 ---
 
@@ -19,9 +19,9 @@ FitAI is a comprehensive AI-powered fitness companion built as a Telegram Mini A
 | **State** | Zustand 5 + persist middleware | localStorage persistence, separate stores per feature |
 | **Telegram** | @twa-dev/sdk 8 | Mini App API: theme, haptics, back button |
 | **AI** | OpenAI API (planned) | GPT-4o for text, Vision for food photos |
-| **Backend** | TBD (Supabase or Node.js) | Currently all client-side with localStorage |
+| **Backend** | Supabase (optional) | Cloud sync via `@supabase/supabase-js`, offline-first |
 
-**Build size:** ~276KB JS (80KB gzipped)
+**Build size:** ~592KB JS (161KB gzipped)
 
 ---
 
@@ -184,12 +184,13 @@ src/
 - Social sharing (workout summaries)
 - Achievement/streak system
 
-#### Iteration 5 — Backend & Sync
-- Supabase or Node.js backend
+#### Iteration 5 — Backend & Sync ✅
+- Supabase backend integration (`@supabase/supabase-js`)
 - Telegram auth (user identity via Mini App init data)
-- Cloud data sync (cross-device)
-- Push notifications via Telegram bot
-- Data export (CSV/PDF reports)
+- Cloud data sync (bidirectional, offline-first, last-write-wins)
+- User-configurable Supabase URL + Anon Key in settings
+- Auto-sync and manual sync options
+- SQL migration for all tables with RLS + indexes
 
 #### Iteration 6 — Polish
 - Animations & micro-interactions
@@ -323,10 +324,41 @@ src/components/Skeleton.tsx
 
 ---
 
+## Iteration 7: Supabase Backend + Cloud Sync
+
+### New Files
+- `src/services/supabase/client.ts` — Supabase client init (URL + anon key from settings)
+- `src/services/supabase/auth.ts` — Telegram auth integration (upsert user by telegram_id)
+- `src/services/supabase/database.ts` — Generic CRUD operations for all data types
+- `src/services/supabase/sync.ts` — Bidirectional sync engine (local <-> cloud)
+- `src/services/supabase/types.ts` — Database row types matching Supabase schema
+- `src/services/supabase/index.ts` — Barrel export
+- `src/stores/supabaseStore.ts` — Zustand store for Supabase config, connection state, sync state
+- `supabase/migrations/001_initial.sql` — Full database schema with RLS and indexes
+
+### New Icons
+- `CloudIcon` — cloud sync settings
+- `SyncIcon` — sync action
+- `LinkIcon` — connect action
+
+### Architecture
+- **Offline-first:** App always works with localStorage. Supabase is optional.
+- **User-configured:** No hardcoded URLs/keys. User enters Supabase project URL + anon key in settings.
+- **Bidirectional sync:** Merges local and remote data using last-write-wins by timestamp.
+- **Per-store sync:** Nutrition, Training, Progress, Supplements, Cycles, Profile synced independently.
+- **Telegram auth:** Uses Telegram user ID from Mini App initData to identify users in Supabase.
+- **Auto-sync toggle:** Optional background sync after connection established.
+- **Manual sync:** "Sync Now" button in Cloud Sync settings.
+
+### Database Tables
+users, user_profiles, food_entries, workout_logs, weight_entries, measurements, supplements, supplement_logs, steroid_cycles, pct_entries — all with RLS enabled and indexed.
+
+---
+
 ## Notes
 
-- All data currently stored in browser localStorage via Zustand persist
-- No backend/API calls yet — AI functions return mock data
+- All data stored in browser localStorage via Zustand persist (offline-first)
+- Optional Supabase cloud sync for backup and cross-device access
 - Telegram SDK auto-detects theme but we force dark mode
 - Zero emoji policy — all icons are custom SVG components in `src/icons/`
 - Weight chart is pure SVG (no chart library dependency)
