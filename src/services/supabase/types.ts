@@ -104,6 +104,23 @@ export interface DbSteroidCycle {
   notes: string | null;
 }
 
+export interface DbAchievement {
+  id: string;
+  user_id: string;
+  achievement_id: string;
+  progress: number;
+  unlocked_at: string | null;
+}
+
+export interface DbStreak {
+  id: string;
+  user_id: string;
+  current_streak: number;
+  longest_streak: number;
+  last_activity_date: string | null;
+  streak_freezes: number;
+}
+
 export interface DbPCTEntry {
   id: string;
   user_id: string;

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success' | 'error' | 'info' | 'achievement';
 
 interface Toast {
   id: string;
@@ -21,7 +21,7 @@ export const useToastStore = create<ToastState>()((set) => ({
     set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-    }, 3000);
+    }, type === 'achievement' ? 5000 : 3000);
   },
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));

@@ -439,3 +439,82 @@ export function LinkIcon({ size = defaults.size, color = defaults.color, classNa
     </svg>
   );
 }
+
+// ===== ACHIEVEMENT ICONS =====
+
+export function TrophyIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
+      <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
+      <path d="M4 22h16" />
+      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+      <path d="M18 2H6v7a6 6 0 0012 0V2z" />
+    </svg>
+  );
+}
+
+export function StarIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none" className={className}>
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </svg>
+  );
+}
+
+export function MedalIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M7.21 15L2.66 7.14a2 2 0 01.13-2.2L4.4 2.8A2 2 0 016 2h12a2 2 0 011.6.8l1.6 2.14a2 2 0 01.14 2.2L16.79 15" />
+      <path d="M11 12L5.12 2.2" />
+      <path d="M13 12l5.88-9.8" />
+      <circle cx="12" cy="17" r="5" />
+      <path d="M12 13v4" />
+      <path d="M10 17h4" />
+    </svg>
+  );
+}
+
+export function LockIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0110 0v4" />
+    </svg>
+  );
+}
+
+export function FireStreakIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none" className={className}>
+      <path d="M12 23c-4.97 0-8-3.58-8-8.5C4 10 6.5 6.5 8 5c.5 2 2.04 3.5 3.5 3.5 1 0 .5-2.5 1.5-5.5 1.5 3 4 5.5 4 9.5 0 2-1 3.5-2 4.5 1-1 1.5-2.5 1.5-4 0-2-1-3.5-2-5-.5 2-1.5 3-3 3s-2-1.5-1.5-4C8 9 6 12 6 14.5 6 18 8 21 12 21s6-3 6-6.5c0-1-.5-2.5-1-3.5.5 3-1 6-5 6z" />
+    </svg>
+  );
+}
+
+export function ShieldIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
+export function CrownIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none" className={className}>
+      <path d="M2 20h20L19 8l-4 5-3-7-3 7-4-5-3 12z" />
+      <rect x="2" y="20" width="20" height="2" rx="1" />
+    </svg>
+  );
+}
+
+export function FilterIcon({ size = defaults.size, color = defaults.color, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}

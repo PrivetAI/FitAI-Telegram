@@ -8,7 +8,7 @@ import { useTranslation } from '../i18n';
 import { useTelegram } from '../hooks/useTelegram';
 import {
   ScaleIcon, PlusIcon, TrendUpIcon, TrendDownIcon, RulerIcon,
-  CameraIcon, TrashIcon, ChevronLeftIcon, EmptyChartIcon,
+  TrophyIcon, TrashIcon, ChevronLeftIcon, EmptyChartIcon,
 } from '../icons';
 import type { MeasurementEntry } from '../types';
 
@@ -269,10 +269,10 @@ export function Progress() {
           </Card>
         </div>
         <div className="animate-stagger-in stagger-7">
-          <Card onClick={() => {}} className="flex flex-col items-center py-4">
-            <CameraIcon size={22} color="#60A5FA" className="mb-2" />
-            <div className="text-xs font-semibold">{t('progress.progress_photos')}</div>
-            <div className="text-text-muted text-[10px]">{t('common.comingSoon')}</div>
+          <Card onClick={() => useAppStore.getState().setActiveTab('achievements')} className="flex flex-col items-center py-4">
+            <TrophyIcon size={22} color="#FFD700" className="mb-2" />
+            <div className="text-xs font-semibold">{t('achievements.title')}</div>
+            <div className="text-text-muted text-[10px]">{t('achievements.unlocked')}</div>
           </Card>
         </div>
       </div>

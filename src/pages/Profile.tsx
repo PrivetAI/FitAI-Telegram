@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAppStore } from '../stores/appStore';
 import { useSupplementStore } from '../stores/supplementStore';
 import { useCycleStore } from '../stores/cycleStore';
+import { useAchievementStore } from '../stores/achievementStore';
 import { useAIStore } from '../stores/aiStore';
 import { useLangStore } from '../stores/langStore';
 import { useToastStore } from '../stores/toastStore';
@@ -153,6 +154,8 @@ export function Profile() {
           getCycles: () => cycleStore.cycles,
           getPCTEntries: () => cycleStore.pctEntries,
           getProfile: () => profile,
+          getAchievements: () => useAchievementStore.getState().progress,
+          getStreak: () => useAchievementStore.getState().streak,
           setNutritionEntries: (entries) => useNutritionStore.setState({ entries }),
           setWorkoutLogs: (workoutLogs) => useTrainingStore.setState({ workoutLogs }),
           setWeightEntries: (weightEntries) => useProgressStore.setState({ weightEntries }),
@@ -162,6 +165,8 @@ export function Profile() {
           setCycles: (cycles) => useCycleStore.setState({ cycles }),
           setPCTEntries: (pctEntries) => useCycleStore.setState({ pctEntries }),
           setProfile: (p) => setProfile(p),
+          setAchievements: (a) => useAchievementStore.setState({ progress: a }),
+          setStreak: (s) => useAchievementStore.setState({ streak: s }),
         });
         supaStore.setLastSyncedAt(Date.now());
         haptic('medium');

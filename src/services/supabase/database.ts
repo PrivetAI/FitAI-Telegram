@@ -2,11 +2,13 @@ import { getSupabaseClient } from './client';
 import type {
   DbUserProfile, DbFoodEntry, DbWorkoutLog, DbWeightEntry,
   DbMeasurement, DbSupplement, DbSupplementLog, DbSteroidCycle, DbPCTEntry,
+  DbAchievement, DbStreak,
 } from './types';
 
 type Table =
   | 'user_profiles' | 'food_entries' | 'workout_logs' | 'weight_entries'
-  | 'measurements' | 'supplements' | 'supplement_logs' | 'steroid_cycles' | 'pct_entries';
+  | 'measurements' | 'supplements' | 'supplement_logs' | 'steroid_cycles' | 'pct_entries'
+  | 'achievements' | 'streaks';
 
 // Generic CRUD
 
@@ -160,4 +162,27 @@ export async function upsertPCTEntries(entries: DbPCTEntry[]): Promise<void> {
 
 export async function deletePCTEntry(id: string): Promise<void> {
   await deleteRow('pct_entries', id);
+}
+
+// Achievements
+
+export async function fetchAchievements(userId: string): Promise<DbAchievement[]> {
+  return fetchAll<DbAchievement>('achievements', userId);
+}
+
+export async function upsertAchievements(achievements: DbAchievement[]): Promise<void> {
+  await upsertRows('achievements', achievements);
+}
+
+// Streaks
+
+export async function fetchStreak(userId: string): Promise<DbStreak | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data } = await client.from('streaks').select('*').eq('user_id', userId).single();
+  return (data as DbStreak) || null;
+}
+
+export async function upsertStreak(streak: Partial<DbStreak> & { user_id: string }): Promise<void> {
+  await upsertRow('streaks', streak);
 }

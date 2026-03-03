@@ -169,3 +169,60 @@ input:focus, select:focus, textarea:focus {
 .animate-pull-bounce {
   animation: pullBounce 1s ease-in-out infinite;
 }
+
+/* Achievement toast */
+.achievement-toast {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 152, 0, 0.1));
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.15);
+}
+
+/* Achievement shine animation */
+@keyframes achievementShine {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.achievement-shine::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 215, 0, 0.06) 40%,
+    rgba(255, 215, 0, 0.12) 50%,
+    rgba(255, 215, 0, 0.06) 60%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: achievementShine 3s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Streak glow */
+.streak-glow {
+  box-shadow: 0 0 12px rgba(255, 109, 0, 0.3);
+}
+
+/* Confetti particles */
+@keyframes confettiFloat {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(-60px) rotate(360deg); opacity: 0; }
+}
+
+.confetti-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  animation: confettiFloat 1.5s ease-out forwards;
+}
+
+/* No scrollbar for filter pills */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

@@ -1,10 +1,11 @@
 import { useToastStore } from '../stores/toastStore';
-import { CheckIcon, AlertIcon, InfoIcon, XIcon } from '../icons';
+import { CheckIcon, AlertIcon, InfoIcon, XIcon, TrophyIcon } from '../icons';
 
 const icons = {
   success: { Icon: CheckIcon, color: '#00E676', bg: 'bg-accent/15 border-accent/30' },
   error: { Icon: AlertIcon, color: '#FF5252', bg: 'bg-danger/15 border-danger/30' },
   info: { Icon: InfoIcon, color: '#60A5FA', bg: 'bg-blue-400/15 border-blue-400/30' },
+  achievement: { Icon: TrophyIcon, color: '#FFD700', bg: 'achievement-toast' },
 };
 
 export function ToastContainer() {

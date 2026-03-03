@@ -9,6 +9,8 @@ import { Nutrition } from './pages/Nutrition';
 import { Training } from './pages/Training';
 import { Progress } from './pages/Progress';
 import { Profile } from './pages/Profile';
+import { Achievements } from './pages/Achievements';
+import { useAchievementCheck } from './hooks/useAchievementCheck';
 
 const pages: Record<string, () => React.JSX.Element | null> = {
   dashboard: Dashboard,
@@ -16,10 +18,12 @@ const pages: Record<string, () => React.JSX.Element | null> = {
   training: Training,
   progress: Progress,
   profile: Profile,
+  achievements: Achievements,
 };
 
 export default function App() {
   useTelegram();
+  useAchievementCheck();
   const { onboarded, activeTab } = useAppStore();
 
   if (!onboarded) {

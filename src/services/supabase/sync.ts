@@ -4,11 +4,13 @@ import * as db from './database';
 import type {
   DbFoodEntry, DbWorkoutLog, DbWeightEntry, DbMeasurement,
   DbSupplement, DbSupplementLog, DbSteroidCycle, DbPCTEntry,
+  DbAchievement,
 } from './types';
 import type {
   FoodEntry, WorkoutLog, WeightEntry, MeasurementEntry,
   Supplement, SupplementLog, SteroidCycle, PCTEntry, UserProfile,
 } from '../../types';
+import type { AchievementProgress, StreakData } from '../../types/achievements';
 
 // ---- Converters: Local <-> DB ----
 
@@ -140,6 +142,26 @@ function dbToPct(r: DbPCTEntry): PCTEntry {
   };
 }
 
+// ---- Achievement converters ----
+
+function achievementToDb(a: AchievementProgress, userId: string): DbAchievement {
+  return {
+    id: `${userId}_${a.achievementId}`,
+    user_id: userId,
+    achievement_id: a.achievementId,
+    progress: a.progress,
+    unlocked_at: a.unlockedAt ? new Date(a.unlockedAt).toISOString() : null,
+  };
+}
+
+function dbToAchievement(r: DbAchievement): AchievementProgress {
+  return {
+    achievementId: r.achievement_id,
+    progress: r.progress,
+    unlockedAt: r.unlocked_at ? new Date(r.unlocked_at).getTime() : undefined,
+  };
+}
+
 // ---- Merge util: last-write-wins by ID ----
 
 function mergeById<T extends { id: string }>(
@@ -182,6 +204,8 @@ export interface SyncCallbacks {
   getCycles: () => SteroidCycle[];
   getPCTEntries: () => PCTEntry[];
   getProfile: () => UserProfile | null;
+  getAchievements: () => AchievementProgress[];
+  getStreak: () => StreakData;
   // Setters
   setNutritionEntries: (entries: FoodEntry[]) => void;
   setWorkoutLogs: (logs: WorkoutLog[]) => void;
@@ -192,6 +216,8 @@ export interface SyncCallbacks {
   setCycles: (cycles: SteroidCycle[]) => void;
   setPCTEntries: (entries: PCTEntry[]) => void;
   setProfile: (p: UserProfile) => void;
+  setAchievements: (a: AchievementProgress[]) => void;
+  setStreak: (s: StreakData) => void;
 }
 
 let syncInProgress = false;
@@ -346,6 +372,67 @@ export async function syncProfile(callbacks: SyncCallbacks): Promise<void> {
   }
 }
 
+export async function syncAchievements(callbacks: SyncCallbacks): Promise<void> {
+  const userId = await ensureUser(callbacks);
+  if (!userId) return;
+
+  // Achievements
+  const local = callbacks.getAchievements();
+  const remote = (await db.fetchAchievements(userId)).map(dbToAchievement);
+
+  // Merge: keep the one with higher progress or unlock
+  const map = new Map<string, AchievementProgress>();
+  for (const r of remote) map.set(r.achievementId, r);
+  const toUpload: AchievementProgress[] = [];
+  for (const l of local) {
+    const r = map.get(l.achievementId);
+    if (!r) {
+      toUpload.push(l);
+      map.set(l.achievementId, l);
+    } else if (l.progress > r.progress || (l.unlockedAt && !r.unlockedAt)) {
+      toUpload.push(l);
+      map.set(l.achievementId, l);
+    }
+  }
+  if (toUpload.length > 0) {
+    await db.upsertAchievements(toUpload.map((a) => achievementToDb(a, userId)));
+  }
+  callbacks.setAchievements(Array.from(map.values()));
+
+  // Streak
+  const localStreak = callbacks.getStreak();
+  const remoteStreak = await db.fetchStreak(userId);
+
+  if (remoteStreak) {
+    // Take the one with higher current streak
+    if (localStreak.currentStreak >= remoteStreak.current_streak) {
+      await db.upsertStreak({
+        id: remoteStreak.id,
+        user_id: userId,
+        current_streak: localStreak.currentStreak,
+        longest_streak: Math.max(localStreak.longestStreak, remoteStreak.longest_streak),
+        last_activity_date: localStreak.lastActivityDate,
+        streak_freezes: localStreak.streakFreezes,
+      });
+    } else {
+      callbacks.setStreak({
+        currentStreak: remoteStreak.current_streak,
+        longestStreak: Math.max(localStreak.longestStreak, remoteStreak.longest_streak),
+        lastActivityDate: remoteStreak.last_activity_date,
+        streakFreezes: remoteStreak.streak_freezes,
+      });
+    }
+  } else {
+    await db.upsertStreak({
+      user_id: userId,
+      current_streak: localStreak.currentStreak,
+      longest_streak: localStreak.longestStreak,
+      last_activity_date: localStreak.lastActivityDate,
+      streak_freezes: localStreak.streakFreezes,
+    });
+  }
+}
+
 export async function syncAll(callbacks: SyncCallbacks): Promise<void> {
   if (syncInProgress) return;
   if (!getSupabaseClient()) return;
@@ -358,6 +445,7 @@ export async function syncAll(callbacks: SyncCallbacks): Promise<void> {
     await syncProgress(callbacks);
     await syncSupplements(callbacks);
     await syncCycles(callbacks);
+    await syncAchievements(callbacks);
   } finally {
     syncInProgress = false;
   }

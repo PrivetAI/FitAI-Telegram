@@ -4,8 +4,13 @@ import { useNutritionStore } from '../stores/nutritionStore';
 import { useTrainingStore } from '../stores/trainingStore';
 import { useProgressStore } from '../stores/progressStore';
 import { useSupplementStore } from '../stores/supplementStore';
+import { useAchievementStore } from '../stores/achievementStore';
 import { useTranslation } from '../i18n';
-import { FlameIcon, SparkleIcon, TrainingIcon, ProgressIcon, PillIcon, CheckIcon, DumbbellIcon } from '../icons';
+import { ACHIEVEMENTS } from '../types/achievements';
+import {
+  FlameIcon, SparkleIcon, TrainingIcon, ProgressIcon, PillIcon,
+  CheckIcon, DumbbellIcon, FireStreakIcon, TrophyIcon, ChevronRightIcon,
+} from '../icons';
 
 export function Dashboard() {
   const { t } = useTranslation();
@@ -18,6 +23,8 @@ export function Dashboard() {
   const latestWeight = useProgressStore((s) => s.getLatestWeight());
   const trend = useProgressStore((s) => s.getWeightTrend());
   const checklist = useSupplementStore((s) => s.getTodayChecklist());
+  const streak = useAchievementStore((s) => s.streak);
+  const recentUnlock = useAchievementStore((s) => s.getRecentUnlock());
 
   if (!profile) return null;
 
@@ -26,12 +33,58 @@ export function Dashboard() {
   const takenCount = checklist.filter((s) => s.taken).length;
   const currentWeight = latestWeight ?? profile.weight;
 
+  // Find the achievement definition for recent unlock
+  const recentDef = recentUnlock ? ACHIEVEMENTS.find((a) => a.id === recentUnlock.achievementId) : null;
+
   return (
     <div className="px-5 pt-6 pb-24 animate-fade-in">
       <div className="mb-6">
         <h1 className="text-xl font-bold">{t('dashboard.title')}</h1>
         <p className="text-text-muted text-sm mt-1">{t('dashboard.subtitle')}</p>
       </div>
+
+      {/* Streak widget */}
+      <div className="animate-stagger-in stagger-1">
+        <Card className="mb-4 border-[#FF6D00]/20" onClick={() => setActiveTab('achievements')}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${streak.currentStreak > 0 ? 'bg-[#FF6D00]/15 streak-glow' : 'bg-surface-lighter'}`}>
+                <FireStreakIcon size={24} color={streak.currentStreak > 0 ? '#FF6D00' : '#616161'} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold" style={{ color: streak.currentStreak > 0 ? '#FF6D00' : undefined }}>
+                    {streak.currentStreak}
+                  </span>
+                  <span className="text-sm text-text-muted">{t('dashboard.day_streak')}</span>
+                </div>
+                <div className="text-text-muted text-[10px]">
+                  {t('dashboard.best')}: {streak.longestStreak} {t('dashboard.days')}
+                </div>
+              </div>
+            </div>
+            <ChevronRightIcon size={16} color="#616161" />
+          </div>
+        </Card>
+      </div>
+
+      {/* Recent achievement */}
+      {recentDef && recentUnlock && (
+        <div className="animate-stagger-in stagger-1">
+          <Card className="mb-4 border-[#FFD700]/20 achievement-shine" onClick={() => setActiveTab('achievements')}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#FFD700]/15 flex items-center justify-center">
+                <TrophyIcon size={20} color="#FFD700" />
+              </div>
+              <div className="flex-1">
+                <div className="text-[10px] text-[#FFD700] font-medium">{t('dashboard.latest_achievement')}</div>
+                <div className="text-sm font-semibold">{t(recentDef.titleKey)}</div>
+              </div>
+              <ChevronRightIcon size={16} color="#616161" />
+            </div>
+          </Card>
+        </div>
+      )}
 
       {activeWorkout && (
         <div className="animate-stagger-in stagger-1">

@@ -5,7 +5,7 @@ FitAI is a comprehensive AI-powered fitness companion built as a Telegram Mini A
 
 **GitHub:** `PrivetAI/FitAI-Telegram`
 **Type:** Telegram Mini App (TWA)
-**Status:** In development (iteration 7 complete)
+**Status:** In development (iteration 8 complete)
 
 ---
 
@@ -352,6 +352,43 @@ src/components/Skeleton.tsx
 
 ### Database Tables
 users, user_profiles, food_entries, workout_logs, weight_entries, measurements, supplements, supplement_logs, steroid_cycles, pct_entries — all with RLS enabled and indexed.
+
+---
+
+## Iteration 8: Achievements & Streaks
+
+### Features
+- **Achievement System:** 23 achievements across 5 categories (Nutrition, Training, Progress, Supplements, Streaks)
+- **Streak Tracking:** Daily activity streaks with automatic tracking, streak freezes earned via achievements
+- **Achievement Checker:** Auto-runs after every store change (food log, workout, weight, supplements) with debounce
+- **Achievements Page:** Grid view with category filters, progress bars, tier badges (bronze/silver/gold), unlock dates
+- **Dashboard Integration:** Streak counter widget with fire icon, recent achievement card, navigation to achievements
+- **Achievement Toast:** Special gold-themed toast with glow animation on unlock + heavy haptic feedback
+- **Achievement Shine:** CSS-only shimmer animation on newly unlocked cards (< 24h old)
+- **Streak Glow:** Orange glow on active streak widget
+- **Supabase Sync:** achievements + streaks tables with RLS, synced in sync engine
+- **i18n:** Full EN + RU translations for all 23 achievements + UI labels
+
+### New Files
+- `src/types/achievements.ts` — Achievement definitions, types, all 23 achievements
+- `src/stores/achievementStore.ts` — Zustand store for progress + streak data
+- `src/services/achievements.ts` — Achievement checker + condition evaluator
+- `src/pages/Achievements.tsx` — Full achievements page with grid, filters, stats
+- `src/hooks/useAchievementCheck.ts` — React hook that subscribes to store changes
+- `supabase/migrations/002_achievements.sql` — achievements + streaks tables with RLS
+
+### New Icons
+- `TrophyIcon`, `StarIcon`, `MedalIcon`, `LockIcon`, `FireStreakIcon`, `ShieldIcon`, `CrownIcon`, `FilterIcon`
+
+### Achievement Categories & Tiers
+- **Nutrition (6):** First Bite (B), Calorie Counter (S), Macro Master (G), Meal Prep Pro (S), Century Club (G), Perfect Week (G)
+- **Training (6):** First Rep (B), Iron Regular (S), Beast Mode (G), Heavy Lifter (G), Marathon Session (S), Variety Pack (G)
+- **Progress (5):** Scale Starter (B), Consistent Tracker (S), Transformation (G), Goal Crusher (G), Measure Up (S)
+- **Supplements (3):** Supplement Starter (B), Daily Dose (S), 30 Day Commitment (G)
+- **Streaks (3):** On Fire (B), Unstoppable (S), Legend (G)
+
+### Colors
+- Gold: `#FFD700`, Silver: `#C0C0C0`, Bronze: `#CD7F32`, Streak: `#FF6D00`
 
 ---
 
